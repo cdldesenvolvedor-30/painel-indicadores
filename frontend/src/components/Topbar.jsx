@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   Search,
@@ -16,44 +16,72 @@ import {
 
 import { useAuth } from '../context/AuthContext'
 
+const notificacoesIniciais = [
+  {
+    id: 1,
+    titulo: 'Nova avaliação registrada',
+    descricao: 'Mapa de performance atualizado.',
+    detalhes: 'Uma nova avaliação foi registrada no Mapa de Performance. Verifique a classificação do colaborador.',
+    tempo: 'agora'
+  },
+  {
+    id: 2,
+    titulo: 'Meta atingida',
+    descricao: 'Equipe CDL Centro bateu a meta.',
+    detalhes: 'A unidade CDL Centro atingiu a meta configurada no painel. Acompanhe os indicadores da equipe.',
+    tempo: 'agora'
+  },
+  {
+    id: 3,
+    titulo: 'Novo alerta operacional',
+    descricao: 'Existem indicadores abaixo da meta.',
+    detalhes: 'Alguns indicadores estão abaixo do esperado. Verifique atendimentos, vendas, erros, descontos e T.A.T.',
+    tempo: 'agora'
+  }
+]
+
 function Topbar({ titulo }) {
   const { usuario, logout } = useAuth()
   const navigate = useNavigate()
+  const areaRef = useRef(null)
 
   const [pesquisa, setPesquisa] = useState('')
   const [abrirNotificacoes, setAbrirNotificacoes] = useState(false)
   const [abrirPerfil, setAbrirPerfil] = useState(false)
   const [notificacaoAberta, setNotificacaoAberta] = useState(null)
 
-  const [notificacoes, setNotificacoes] = useState([
-    {
-      id: 1,
-      titulo: 'Nova avaliação registrada',
-      descricao: 'Mapa de performance atualizado.',
-      detalhes:
-        'Uma nova avaliação foi registrada no Mapa de Performance. Verifique se o colaborador está classificado corretamente entre Estrela, Santo, Pecador ou Zumbi.',
-      tempo: 'agora',
-      lida: false
-    },
-    {
-      id: 2,
-      titulo: 'Meta atingida',
-      descricao: 'Equipe CDL Centro bateu a meta.',
-      detalhes:
-        'A unidade CDL Centro atingiu a meta configurada no painel. Acompanhe os indicadores para validar quais colaboradores contribuíram mais para o resultado.',
-      tempo: 'agora',
-      lida: false
-    },
-    {
-      id: 3,
-      titulo: 'Novo alerta operacional',
-      descricao: 'Existem indicadores abaixo da meta.',
-      detalhes:
-        'Alguns indicadores estão abaixo do esperado. Verifique atendimentos, vendas, erros, descontos e T.A.T para identificar pontos de melhoria.',
-      tempo: 'agora',
-      lida: false
+  const [notificacoes, setNotificacoes] = useState(() => {
+    const lidasSalvas = JSON.parse(localStorage.getItem('notificacoes_lidas') || '[]')
+
+    return notificacoesIniciais.map((item) => ({
+      ...item,
+      lida: lidasSalvas.includes(item.id)
+    }))
+  })
+
+  useEffect(() => {
+    function fecharAoClicarFora(event) {
+      if (areaRef.current && !areaRef.current.contains(event.target)) {
+        setAbrirNotificacoes(false)
+        setAbrirPerfil(false)
+        setNotificacaoAberta(null)
+      }
     }
-  ])
+
+    document.addEventListener('mousedown', fecharAoClicarFora)
+
+    return () => {
+      document.removeEventListener('mousedown', fecharAoClicarFora)
+    }
+  }, [])
+
+  function salvarLidas(lista) {
+    const idsLidas = lista
+      .filter((item) => item.lida)
+      .map((item) => item.id)
+
+    localStorage.setItem('notificacoes_lidas', JSON.stringify(idsLidas))
+  }
 
   const naoLidas = notificacoes.filter((item) => !item.lida).length
 
@@ -66,9 +94,7 @@ function Topbar({ titulo }) {
 
   function pesquisar(e) {
     e.preventDefault()
-
     if (!pesquisa.trim()) return
-
     navigate(`/indicadores?busca=${pesquisa}`)
   }
 
@@ -80,23 +106,24 @@ function Topbar({ titulo }) {
   function abrirNotificacao(item) {
     setNotificacaoAberta(item)
 
-    setNotificacoes((lista) =>
-      lista.map((notificacao) =>
-        notificacao.id === item.id
-          ? { ...notificacao, lida: true }
-          : notificacao
-      )
+    const atualizadas = notificacoes.map((notificacao) =>
+      notificacao.id === item.id
+        ? { ...notificacao, lida: true }
+        : notificacao
     )
+
+    setNotificacoes(atualizadas)
+    salvarLidas(atualizadas)
   }
 
   function marcarTodasComoLidas() {
-    setNotificacoes((lista) =>
-      lista.map((notificacao) => ({
-        ...notificacao,
-        lida: true
-      }))
-    )
+    const atualizadas = notificacoes.map((notificacao) => ({
+      ...notificacao,
+      lida: true
+    }))
 
+    setNotificacoes(atualizadas)
+    salvarLidas(atualizadas)
     setNotificacaoAberta(null)
   }
 
@@ -112,7 +139,7 @@ function Topbar({ titulo }) {
         </p>
       </div>
 
-      <div className="flex items-center gap-4 relative">
+      <div ref={areaRef} className="flex items-center gap-4 relative">
         <form
           onSubmit={pesquisar}
           className="hidden lg:flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3 w-80 shadow-xl"
@@ -125,10 +152,7 @@ function Topbar({ titulo }) {
           />
 
           <button type="submit">
-            <Search
-              size={20}
-              className="text-slate-400 hover:text-blue-400 transition"
-            />
+            <Search size={20} className="text-slate-400 hover:text-blue-400 transition" />
           </button>
         </form>
 
@@ -185,12 +209,11 @@ function Topbar({ titulo }) {
                         }`}
                       >
                         <div className="flex gap-4">
-                          <div
-                            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                              item.lida
-                                ? 'bg-slate-800 text-slate-500'
-                                : 'bg-blue-500/15 text-blue-400'
-                            }`}
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                            item.lida
+                              ? 'bg-slate-800 text-slate-500'
+                              : 'bg-blue-500/15 text-blue-400'
+                          }`}
                           >
                             <Bell size={20} />
                           </div>
@@ -199,10 +222,7 @@ function Topbar({ titulo }) {
                             <div className="flex justify-between gap-3">
                               <div className="flex items-center gap-2">
                                 {!item.lida && (
-                                  <Circle
-                                    size={8}
-                                    className="fill-blue-400 text-blue-400"
-                                  />
+                                  <Circle size={8} className="fill-blue-400 text-blue-400" />
                                 )}
 
                                 <p className="font-bold">
@@ -320,16 +340,12 @@ function Topbar({ titulo }) {
 
                 <div className="flex items-center gap-3 text-slate-300 bg-slate-900/60 rounded-xl p-3">
                   <Shield size={18} />
-                  <span>
-                    Perfil: {usuario?.perfil}
-                  </span>
+                  <span>Perfil: {usuario?.perfil}</span>
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-300 bg-slate-900/60 rounded-xl p-3">
                   <User size={18} />
-                  <span>
-                    Setor: {usuario?.setor || 'Não informado'}
-                  </span>
+                  <span>Setor: {usuario?.setor || 'Não informado'}</span>
                 </div>
               </div>
 
