@@ -1,5 +1,6 @@
-const express = require('express');
-const cors = require('cors');
+const express = require('express')
+const cors = require('cors')
+
 const authRoutes = require('./routes/auth.routes')
 const usuariosRoutes = require('./routes/usuarios.routes')
 const logsRoutes = require('./routes/logs.routes')
@@ -7,27 +8,26 @@ const metasRoutes = require('./routes/metas.routes')
 const mapaPerformanceRoutes = require('./routes/mapaPerformance.routes')
 const crmRoutes = require('./routes/crm.routes')
 
-const app = express();
+const colaboradoresRoutes = require('./routes/colaboradores.routes')
+const indicadoresRoutes = require('./routes/indicadores.routes')
 
-const colaboradoresRoutes = require('./routes/colaboradores.routes');
-const indicadoresRoutes = require('./routes/indicadores.routes');
-
-const cors = require('cors')
+const app = express()
 
 app.use(cors({
   origin: '*',
   credentials: true
 }))
-app.use(express.json());
+
+app.use(express.json())
 
 app.get('/', (req, res) => {
-    res.json({
-        mensagem: 'Painel de Indicadores Online 🚀'
-    });
-});
+  res.json({
+    mensagem: 'Painel de Indicadores Online 🚀'
+  })
+})
 
-app.use('/colaboradores', colaboradoresRoutes);
-app.use('/indicadores', indicadoresRoutes);
+app.use('/colaboradores', colaboradoresRoutes)
+app.use('/indicadores', indicadoresRoutes)
 app.use('/auth', authRoutes)
 app.use('/usuarios', usuariosRoutes)
 app.use('/logs', logsRoutes)
@@ -35,4 +35,4 @@ app.use('/metas', metasRoutes)
 app.use('/mapa-performance', mapaPerformanceRoutes)
 app.use('/crm', crmRoutes)
 
-module.exports = app;
+module.exports = app
