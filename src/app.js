@@ -12,7 +12,12 @@ const app = express();
 const colaboradoresRoutes = require('./routes/colaboradores.routes');
 const indicadoresRoutes = require('./routes/indicadores.routes');
 
-app.use(cors());
+const cors = require('cors')
+
+app.use(cors({
+  origin: '*',
+  credentials: true
+}))
 app.use(express.json());
 
 app.get('/', (req, res) => {
