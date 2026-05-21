@@ -3,9 +3,12 @@ const express = require('express')
 const router = express.Router()
 
 const {
-    login
+  login,
+  resetAdmin
 } = require('../controllers/auth.controller')
 
 router.post('/login', login)
+
+router.get('/reset-admin', resetAdmin)
 
 module.exports = router
