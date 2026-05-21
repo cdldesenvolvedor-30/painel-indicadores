@@ -9,6 +9,4 @@ const {
 
 router.post('/login', login)
 
-router.get('/reset-admin', resetAdmin)
-
 module.exports = router
