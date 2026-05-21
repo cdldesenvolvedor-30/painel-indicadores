@@ -8,19 +8,54 @@ import {
   User,
   LogOut,
   Shield,
-  Mail
+  Mail,
+  CheckCheck,
+  ArrowLeft,
+  Circle
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
 
 function Topbar({ titulo }) {
   const { usuario, logout } = useAuth()
-
   const navigate = useNavigate()
 
   const [pesquisa, setPesquisa] = useState('')
   const [abrirNotificacoes, setAbrirNotificacoes] = useState(false)
   const [abrirPerfil, setAbrirPerfil] = useState(false)
+  const [notificacaoAberta, setNotificacaoAberta] = useState(null)
+
+  const [notificacoes, setNotificacoes] = useState([
+    {
+      id: 1,
+      titulo: 'Nova avaliação registrada',
+      descricao: 'Mapa de performance atualizado.',
+      detalhes:
+        'Uma nova avaliação foi registrada no Mapa de Performance. Verifique se o colaborador está classificado corretamente entre Estrela, Santo, Pecador ou Zumbi.',
+      tempo: 'agora',
+      lida: false
+    },
+    {
+      id: 2,
+      titulo: 'Meta atingida',
+      descricao: 'Equipe CDL Centro bateu a meta.',
+      detalhes:
+        'A unidade CDL Centro atingiu a meta configurada no painel. Acompanhe os indicadores para validar quais colaboradores contribuíram mais para o resultado.',
+      tempo: 'agora',
+      lida: false
+    },
+    {
+      id: 3,
+      titulo: 'Novo alerta operacional',
+      descricao: 'Existem indicadores abaixo da meta.',
+      detalhes:
+        'Alguns indicadores estão abaixo do esperado. Verifique atendimentos, vendas, erros, descontos e T.A.T para identificar pontos de melhoria.',
+      tempo: 'agora',
+      lida: false
+    }
+  ])
+
+  const naoLidas = notificacoes.filter((item) => !item.lida).length
 
   const dataAtual = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -42,20 +77,28 @@ function Topbar({ titulo }) {
     navigate('/login')
   }
 
-  const notificacoes = [
-    {
-      titulo: 'Nova avaliação registrada',
-      descricao: 'Mapa de performance atualizado.'
-    },
-    {
-      titulo: 'Meta atingida',
-      descricao: 'Equipe CDL Centro bateu a meta.'
-    },
-    {
-      titulo: 'Novo alerta operacional',
-      descricao: 'Existem indicadores abaixo da meta.'
-    }
-  ]
+  function abrirNotificacao(item) {
+    setNotificacaoAberta(item)
+
+    setNotificacoes((lista) =>
+      lista.map((notificacao) =>
+        notificacao.id === item.id
+          ? { ...notificacao, lida: true }
+          : notificacao
+      )
+    )
+  }
+
+  function marcarTodasComoLidas() {
+    setNotificacoes((lista) =>
+      lista.map((notificacao) => ({
+        ...notificacao,
+        lida: true
+      }))
+    )
+
+    setNotificacaoAberta(null)
+  }
 
   return (
     <div className="flex justify-between items-start mb-8 relative">
@@ -94,72 +137,137 @@ function Topbar({ titulo }) {
             onClick={() => {
               setAbrirNotificacoes(!abrirNotificacoes)
               setAbrirPerfil(false)
+              setNotificacaoAberta(null)
             }}
             className="bg-slate-900 border border-slate-800 rounded-2xl p-3 relative hover:bg-slate-800 transition shadow-xl"
           >
             <Bell size={22} />
 
-            <span className="absolute -top-2 -right-2 bg-red-500 text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-lg">
-              {notificacoes.length}
-            </span>
+            {naoLidas > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-lg">
+                {naoLidas}
+              </span>
+            )}
           </button>
 
           {abrirNotificacoes && (
-            <div className="absolute right-0 mt-3 w-[420px] bg-[#020817]/95 backdrop-blur-xl border border-blue-500/20 rounded-[24px] shadow-[0_25px_80px_rgba(0,0,0,0.55)] z-50 overflow-hidden">
-              <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-blue-600/15 to-transparent">
-                <div className="flex items-center justify-between">
-                  <div>
+            <div className="absolute right-0 mt-3 w-[430px] bg-[#020817]/95 backdrop-blur-xl border border-blue-500/20 rounded-[24px] shadow-[0_25px_80px_rgba(0,0,0,0.55)] z-50 overflow-hidden">
+              {!notificacaoAberta ? (
+                <>
+                  <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-blue-600/15 to-transparent">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="font-bold text-xl">
+                          Central de Notificações
+                        </h2>
+
+                        <p className="text-slate-400 text-sm mt-1">
+                          Atualizações importantes do sistema
+                        </p>
+                      </div>
+
+                      <span className="bg-red-500/15 text-red-400 px-3 py-1 rounded-full text-sm font-bold">
+                        {naoLidas} não lidas
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 space-y-3 max-h-96 overflow-y-auto">
+                    {notificacoes.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => abrirNotificacao(item)}
+                        className={`w-full text-left group border rounded-2xl p-4 transition ${
+                          item.lida
+                            ? 'bg-slate-950/40 border-slate-800 opacity-70'
+                            : 'bg-slate-950/80 border-blue-500/30 hover:border-blue-500/60 hover:bg-blue-950/20'
+                        }`}
+                      >
+                        <div className="flex gap-4">
+                          <div
+                            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                              item.lida
+                                ? 'bg-slate-800 text-slate-500'
+                                : 'bg-blue-500/15 text-blue-400'
+                            }`}
+                          >
+                            <Bell size={20} />
+                          </div>
+
+                          <div className="flex-1">
+                            <div className="flex justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                {!item.lida && (
+                                  <Circle
+                                    size={8}
+                                    className="fill-blue-400 text-blue-400"
+                                  />
+                                )}
+
+                                <p className="font-bold">
+                                  {item.titulo}
+                                </p>
+                              </div>
+
+                              <span className="text-xs text-slate-500">
+                                {item.tempo}
+                              </span>
+                            </div>
+
+                            <p className="text-sm text-slate-400 mt-1 leading-relaxed">
+                              {item.descricao}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="p-4 border-t border-slate-800">
+                    <button
+                      onClick={marcarTodasComoLidas}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 transition rounded-2xl py-3 font-bold shadow-xl"
+                    >
+                      <CheckCheck size={18} />
+                      Marcar todas como lidas
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-blue-600/15 to-transparent">
+                    <button
+                      onClick={() => setNotificacaoAberta(null)}
+                      className="flex items-center gap-2 text-slate-400 hover:text-white transition mb-4"
+                    >
+                      <ArrowLeft size={18} />
+                      Voltar
+                    </button>
+
                     <h2 className="font-bold text-xl">
-                      Central de Notificações
+                      {notificacaoAberta.titulo}
                     </h2>
 
                     <p className="text-slate-400 text-sm mt-1">
-                      Atualizações importantes do sistema
+                      Recebida {notificacaoAberta.tempo}
                     </p>
                   </div>
 
-                  <span className="bg-red-500/15 text-red-400 px-3 py-1 rounded-full text-sm font-bold">
-                    {notificacoes.length} novas
-                  </span>
-                </div>
-              </div>
+                  <div className="p-5">
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5">
+                      <p className="text-slate-300 leading-relaxed">
+                        {notificacaoAberta.detalhes}
+                      </p>
+                    </div>
 
-              <div className="p-3 space-y-3 max-h-96 overflow-y-auto">
-                {notificacoes.map((item, index) => (
-                  <div
-                    key={index}
-                    className="group bg-slate-950/70 border border-slate-800 hover:border-blue-500/40 rounded-2xl p-4 transition hover:bg-blue-950/20"
-                  >
-                    <div className="flex gap-4">
-                      <div className="w-11 h-11 rounded-2xl bg-blue-500/15 text-blue-400 flex items-center justify-center shrink-0">
-                        <Bell size={20} />
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex justify-between gap-3">
-                          <p className="font-bold">
-                            {item.titulo}
-                          </p>
-
-                          <span className="text-xs text-slate-500">
-                            agora
-                          </span>
-                        </div>
-
-                        <p className="text-sm text-slate-400 mt-1 leading-relaxed">
-                          {item.descricao}
-                        </p>
-                      </div>
+                    <div className="mt-5 bg-green-500/10 border border-green-500/20 text-green-400 rounded-2xl p-4 flex items-center gap-3">
+                      <CheckCheck size={20} />
+                      Esta notificação foi marcada como lida.
                     </div>
                   </div>
-                ))}
-              </div>
-
-              <div className="p-4 border-t border-slate-800">
-                <button className="w-full bg-blue-600 hover:bg-blue-700 transition rounded-2xl py-3 font-bold shadow-xl">
-                  Ver todas as notificações
-                </button>
-              </div>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -169,6 +277,7 @@ function Topbar({ titulo }) {
             onClick={() => {
               setAbrirPerfil(!abrirPerfil)
               setAbrirNotificacoes(false)
+              setNotificacaoAberta(null)
             }}
             className="bg-blue-600 w-11 h-11 rounded-full overflow-hidden flex items-center justify-center font-bold hover:scale-105 transition shadow-xl"
           >
