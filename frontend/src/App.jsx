@@ -223,11 +223,15 @@ function App() {
   }
 />
 
-<Route 
-path="/integracoes" 
-element={
-<Integracoes />
-} 
+<Route
+  path="/integracoes"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <Integracoes />
+      </Layout>
+    </ProtectedRoute>
+  }
 />
 
           </Routes>
