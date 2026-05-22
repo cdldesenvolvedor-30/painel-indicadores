@@ -13,13 +13,7 @@ const indicadoresRoutes = require('./routes/indicadores.routes')
 
 const app = express()
 
-app.use(cors({
-  origin: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}))
-
+app.use(cors())
 app.use(express.json())
 
 app.get('/', (req, res) => {
