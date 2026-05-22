@@ -14,21 +14,10 @@ const indicadoresRoutes = require('./routes/indicadores.routes')
 const app = express()
 
 app.use(cors({
-  origin: [
-    'https://painel-indicadores-beta.vercel.app',
-    'http://localhost:5173'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}))
-
-app.use(cors({
-  origin: [
-    'https://painel-indicadores-beta.vercel.app',
-    'http://localhost:5173'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }))
 
 app.use(express.json())
@@ -39,8 +28,6 @@ app.get('/', (req, res) => {
   })
 })
 
-app.use('/colaboradores', colaboradoresRoutes)
-app.use('/indicadores', indicadoresRoutes)
 app.use('/auth', authRoutes)
 app.use('/usuarios', usuariosRoutes)
 app.use('/logs', logsRoutes)
@@ -48,5 +35,7 @@ app.use('/metas', metasRoutes)
 app.use('/mapa-performance', mapaPerformanceRoutes)
 app.use('/crm', crmRoutes)
 app.use('/digisac', digisacRoutes)
+app.use('/colaboradores', colaboradoresRoutes)
+app.use('/indicadores', indicadoresRoutes)
 
 module.exports = app
