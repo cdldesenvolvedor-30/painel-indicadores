@@ -8,13 +8,18 @@ import {
   Loader2,
   Database,
   MessageSquareMore,
-  RefreshCw
+  RefreshCw,
+  Power,
+  Wifi,
+  WifiOff
 } from 'lucide-react'
 
 function Integracoes() {
   const [loading, setLoading] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [sincronizando, setSincronizando] = useState(false)
+  const [status, setStatus] = useState('desconectado')
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(null)
 
   async function testarDigisac() {
     try {
@@ -23,12 +28,16 @@ function Integracoes() {
 
       const response = await api.get('/digisac/testar-conexao')
 
+      setStatus('conectado')
+
       setResultado({
         sucesso: true,
         mensagem: response.data.mensagem
       })
     } catch (error) {
       console.error(error)
+
+      setStatus('falha')
 
       setResultado({
         sucesso: false,
@@ -42,10 +51,23 @@ function Integracoes() {
   }
 
   async function sincronizarCRM() {
+    if (status !== 'conectado') {
+      setResultado({
+        sucesso: false,
+        mensagem: 'Teste a conexão com a Digisac antes de sincronizar.'
+      })
+
+      return
+    }
+
     try {
       setSincronizando(true)
 
       const response = await api.post('/digisac/sincronizar-crm')
+
+      const agora = new Date().toLocaleString('pt-BR')
+
+      setUltimaSincronizacao(agora)
 
       setResultado({
         sucesso: true,
@@ -53,6 +75,8 @@ function Integracoes() {
       })
     } catch (error) {
       console.error(error)
+
+      setStatus('falha')
 
       setResultado({
         sucesso: false,
@@ -64,6 +88,37 @@ function Integracoes() {
       setSincronizando(false)
     }
   }
+
+  function desconectarDigisac() {
+    setStatus('desconectado')
+    setResultado({
+      sucesso: true,
+      mensagem: 'Integração desconectada nesta sessão.'
+    })
+  }
+
+  const statusConfig = {
+    conectado: {
+      texto: 'Conectado',
+      descricao: 'API da Digisac conectada com sucesso.',
+      classe: 'bg-green-500/10 text-green-400 border-green-500/20',
+      icon: Wifi
+    },
+    falha: {
+      texto: 'Falha na conexão',
+      descricao: 'Existe uma falha na comunicação com a Digisac.',
+      classe: 'bg-red-500/10 text-red-400 border-red-500/20',
+      icon: WifiOff
+    },
+    desconectado: {
+      texto: 'Desconectado',
+      descricao: 'Aguardando teste de conexão.',
+      classe: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+      icon: Power
+    }
+  }
+
+  const StatusIcon = statusConfig[status].icon
 
   return (
     <div className="px-8 py-6 space-y-8">
@@ -96,26 +151,25 @@ function Integracoes() {
               </div>
             </div>
 
-            <span className="bg-green-500/10 text-green-400 text-xs px-3 py-1 rounded-full font-bold">
-              API
+            <span
+              className={`text-xs px-3 py-1 rounded-full font-bold border ${statusConfig[status].classe}`}
+            >
+              {statusConfig[status].texto}
             </span>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 gap-4">
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`border rounded-2xl p-4 ${statusConfig[status].classe}`}>
               <div className="flex items-center gap-3 mb-2">
-                <Database
-                  size={18}
-                  className="text-blue-400"
-                />
+                <StatusIcon size={18} />
 
                 <span className="font-semibold">
                   Status
                 </span>
               </div>
 
-              <p className="text-sm text-slate-400">
-                Aguardando teste de conexão.
+              <p className="text-sm opacity-90">
+                {statusConfig[status].descricao}
               </p>
             </div>
 
@@ -127,12 +181,12 @@ function Integracoes() {
                 />
 
                 <span className="font-semibold">
-                  Sincronização
+                  Última sincronização
                 </span>
               </div>
 
               <p className="text-sm text-slate-400">
-                Manual
+                {ultimaSincronizacao || 'Nenhuma sincronização realizada.'}
               </p>
             </div>
           </div>
@@ -145,11 +199,7 @@ function Integracoes() {
             >
               {loading ? (
                 <>
-                  <Loader2
-                    size={20}
-                    className="animate-spin"
-                  />
-
+                  <Loader2 size={20} className="animate-spin" />
                   Testando conexão...
                 </>
               ) : (
@@ -162,16 +212,12 @@ function Integracoes() {
 
             <button
               onClick={sincronizarCRM}
-              disabled={sincronizando}
-              className="bg-green-600 hover:bg-green-700 transition px-6 py-4 rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+              disabled={sincronizando || status !== 'conectado'}
+              className="bg-green-600 hover:bg-green-700 transition px-6 py-4 rounded-2xl font-bold flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {sincronizando ? (
                 <>
-                  <Loader2
-                    size={20}
-                    className="animate-spin"
-                  />
-
+                  <Loader2 size={20} className="animate-spin" />
                   Sincronizando...
                 </>
               ) : (
@@ -180,6 +226,15 @@ function Integracoes() {
                   Sincronizar CRM
                 </>
               )}
+            </button>
+
+            <button
+              onClick={desconectarDigisac}
+              disabled={status === 'desconectado'}
+              className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition px-6 py-4 rounded-2xl font-bold flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Power size={20} />
+              Desconectar
             </button>
           </div>
 
