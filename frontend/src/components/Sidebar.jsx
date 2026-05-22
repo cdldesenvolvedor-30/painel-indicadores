@@ -12,8 +12,8 @@ import {
   FileClock,
   LogOut,
   Map,
-  MessageSquareMore
-
+  MessageSquareMore,
+  PlugZap
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
@@ -49,14 +49,17 @@ function Sidebar() {
             <Item to="/comparativo-metas" ativo={location.pathname === '/comparativo-metas'} icon={Target} texto="Meta x Resultado" />
             <Item to="/ranking" ativo={location.pathname === '/ranking'} icon={Trophy} texto="Classificação" />
             <Item to="/alertas" ativo={location.pathname === '/alertas'} icon={Bell} texto="Alertas" />
-            <Item to="/mapa-performance" ativo={location.pathname === '/mapa-performance'} icon={Map}  texto="Mapa de Performance" />
+            <Item to="/mapa-performance" ativo={location.pathname === '/mapa-performance'} icon={Map} texto="Mapa de Performance" />
             <Item to="/crm" ativo={location.pathname === '/crm'} icon={MessageSquareMore} texto="CRM" />
-
           </Grupo>
 
           <Grupo titulo="Gestão">
             <Item to="/colaboradores" ativo={location.pathname === '/colaboradores'} icon={Users} texto="Colaboradores" />
             <Item to="/metas" ativo={location.pathname === '/metas'} icon={Target} texto="Metas/KPIs" />
+          </Grupo>
+
+          <Grupo titulo="Integrações">
+            <Item to="/integracoes" ativo={location.pathname === '/integracoes'} icon={PlugZap} texto="Integrações" />
           </Grupo>
 
           {usuario?.perfil === 'admin' && (

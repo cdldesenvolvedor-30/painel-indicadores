@@ -20,12 +20,14 @@ import Logs from './pages/Logs'
 import MapaPerformance from './pages/MapaPerformance'
 import ComparativoMetas from './pages/ComparativoMetas'
 import CRM from './pages/CRM'
+import Integracoes from './pages/Integracoes'
 
 import Sidebar from './components/Sidebar'
 import ProtectedRoute from './components/ProtectedRoute'
 
 import { AuthProvider } from './context/AuthContext'
 import { FiltrosProvider } from './context/FiltrosContext'
+import { PlugZap } from 'lucide-react'
 
 function Layout({ children }) {
   return (
@@ -219,6 +221,13 @@ function App() {
       </Layout>
     </ProtectedRoute>
   }
+/>
+
+<Route 
+path="/integracoes" 
+element={
+<Integracoes />
+} 
 />
 
           </Routes>
