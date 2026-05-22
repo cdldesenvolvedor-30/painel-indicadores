@@ -18,8 +18,14 @@ function Integracoes() {
   const [loading, setLoading] = useState(false)
   const [resultado, setResultado] = useState(null)
   const [sincronizando, setSincronizando] = useState(false)
-  const [status, setStatus] = useState('desconectado')
-  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(null)
+
+  const [status, setStatus] = useState(() => {
+    return localStorage.getItem('digisac_status') || 'desconectado'
+  })
+
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(() => {
+    return localStorage.getItem('digisac_ultima_sincronizacao') || null
+  })
 
   async function testarDigisac() {
     try {
@@ -29,6 +35,7 @@ function Integracoes() {
       const response = await api.get('/digisac/testar-conexao')
 
       setStatus('conectado')
+      localStorage.setItem('digisac_status', 'conectado')
 
       setResultado({
         sucesso: true,
@@ -38,6 +45,7 @@ function Integracoes() {
       console.error(error)
 
       setStatus('falha')
+      localStorage.setItem('digisac_status', 'falha')
 
       setResultado({
         sucesso: false,
@@ -68,6 +76,7 @@ function Integracoes() {
       const agora = new Date().toLocaleString('pt-BR')
 
       setUltimaSincronizacao(agora)
+      localStorage.setItem('digisac_ultima_sincronizacao', agora)
 
       setResultado({
         sucesso: true,
@@ -77,6 +86,7 @@ function Integracoes() {
       console.error(error)
 
       setStatus('falha')
+      localStorage.setItem('digisac_status', 'falha')
 
       setResultado({
         sucesso: false,
@@ -91,6 +101,8 @@ function Integracoes() {
 
   function desconectarDigisac() {
     setStatus('desconectado')
+    localStorage.setItem('digisac_status', 'desconectado')
+
     setResultado({
       sucesso: true,
       mensagem: 'Integração desconectada nesta sessão.'
