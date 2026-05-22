@@ -8,16 +8,21 @@ const metasRoutes = require('./routes/metas.routes')
 const mapaPerformanceRoutes = require('./routes/mapaPerformance.routes')
 const crmRoutes = require('./routes/crm.routes')
 const digisacRoutes = require('./routes/digisac.routes')
-
 const colaboradoresRoutes = require('./routes/colaboradores.routes')
 const indicadoresRoutes = require('./routes/indicadores.routes')
 
 const app = express()
 
 app.use(cors({
-  origin: '*',
-  credentials: true
+  origin: [
+    'https://painel-indicadores-beta.vercel.app',
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }))
+
+app.options('*', cors())
 
 app.use(express.json())
 
