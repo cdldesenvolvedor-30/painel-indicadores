@@ -11,7 +11,10 @@ import {
   Mail,
   CheckCheck,
   ArrowLeft,
-  Circle
+  Circle,
+  Settings,
+  Building2,
+  Crown
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
@@ -130,9 +133,7 @@ function Topbar({ titulo }) {
   return (
     <div className="flex justify-between items-start mb-8 relative">
       <div>
-        <h1 className="text-4xl font-bold">
-          {titulo}
-        </h1>
+        <h1 className="text-4xl font-bold">{titulo}</h1>
 
         <p className="text-slate-400 mt-2">
           Visão geral da performance operacional
@@ -181,13 +182,8 @@ function Topbar({ titulo }) {
                   <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-blue-600/15 to-transparent">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="font-bold text-xl">
-                          Central de Notificações
-                        </h2>
-
-                        <p className="text-slate-400 text-sm mt-1">
-                          Atualizações importantes do sistema
-                        </p>
+                        <h2 className="font-bold text-xl">Central de Notificações</h2>
+                        <p className="text-slate-400 text-sm mt-1">Atualizações importantes do sistema</p>
                       </div>
 
                       <span className="bg-red-500/15 text-red-400 px-3 py-1 rounded-full text-sm font-bold">
@@ -209,11 +205,12 @@ function Topbar({ titulo }) {
                         }`}
                       >
                         <div className="flex gap-4">
-                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
-                            item.lida
-                              ? 'bg-slate-800 text-slate-500'
-                              : 'bg-blue-500/15 text-blue-400'
-                          }`}
+                          <div
+                            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                              item.lida
+                                ? 'bg-slate-800 text-slate-500'
+                                : 'bg-blue-500/15 text-blue-400'
+                            }`}
                           >
                             <Bell size={20} />
                           </div>
@@ -225,14 +222,10 @@ function Topbar({ titulo }) {
                                   <Circle size={8} className="fill-blue-400 text-blue-400" />
                                 )}
 
-                                <p className="font-bold">
-                                  {item.titulo}
-                                </p>
+                                <p className="font-bold">{item.titulo}</p>
                               </div>
 
-                              <span className="text-xs text-slate-500">
-                                {item.tempo}
-                              </span>
+                              <span className="text-xs text-slate-500">{item.tempo}</span>
                             </div>
 
                             <p className="text-sm text-slate-400 mt-1 leading-relaxed">
@@ -265,9 +258,7 @@ function Topbar({ titulo }) {
                       Voltar
                     </button>
 
-                    <h2 className="font-bold text-xl">
-                      {notificacaoAberta.titulo}
-                    </h2>
+                    <h2 className="font-bold text-xl">{notificacaoAberta.titulo}</h2>
 
                     <p className="text-slate-400 text-sm mt-1">
                       Recebida {notificacaoAberta.tempo}
@@ -299,7 +290,7 @@ function Topbar({ titulo }) {
               setAbrirNotificacoes(false)
               setNotificacaoAberta(null)
             }}
-            className="bg-blue-600 w-11 h-11 rounded-full overflow-hidden flex items-center justify-center font-bold hover:scale-105 transition shadow-xl"
+            className="bg-blue-600 w-11 h-11 rounded-full overflow-hidden flex items-center justify-center font-bold hover:scale-105 transition shadow-xl ring-2 ring-blue-500/30"
           >
             {usuario?.foto_url ? (
               <img
@@ -313,49 +304,64 @@ function Topbar({ titulo }) {
           </button>
 
           {abrirPerfil && (
-            <div className="absolute right-0 mt-3 w-80 bg-[#020817]/95 backdrop-blur-xl border border-blue-500/20 rounded-[24px] shadow-[0_25px_80px_rgba(0,0,0,0.55)] z-50 overflow-hidden">
-              <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-blue-600/15 to-transparent">
-                <div className="flex items-center gap-4">
-                  <div className="bg-blue-600 w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold shadow-xl">
-                    {usuario?.nome?.charAt(0) || 'U'}
+            <div className="absolute right-0 mt-3 w-[370px] bg-[#020817]/95 backdrop-blur-xl border border-blue-500/20 rounded-[28px] shadow-[0_25px_80px_rgba(0,0,0,0.60)] z-50 overflow-hidden">
+              <div className="relative p-6 border-b border-slate-800 bg-gradient-to-br from-blue-600/25 via-blue-950/25 to-transparent">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full" />
+
+                <div className="relative flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-3xl overflow-hidden bg-blue-600 flex items-center justify-center text-3xl font-bold shadow-2xl ring-4 ring-blue-500/20">
+                    {usuario?.foto_url ? (
+                      <img
+                        src={usuario.foto_url}
+                        alt={usuario.nome}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      usuario?.nome?.charAt(0) || 'U'
+                    )}
                   </div>
 
-                  <div>
-                    <h2 className="font-bold text-lg">
+                  <div className="min-w-0">
+                    <h2 className="font-bold text-2xl truncate">
                       {usuario?.nome}
                     </h2>
 
-                    <p className="text-slate-400 text-sm capitalize">
-                      {usuario?.perfil}
+                    <p className="text-slate-400 text-sm truncate">
+                      {usuario?.email}
                     </p>
+
+                    <span className="inline-flex items-center gap-2 mt-3 bg-blue-500/15 text-blue-400 px-3 py-1 rounded-full text-xs font-bold capitalize">
+                      <Crown size={13} />
+                      {usuario?.perfil}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-5 space-y-4">
-                <div className="flex items-center gap-3 text-slate-300 bg-slate-900/60 rounded-xl p-3">
-                  <Mail size={18} />
-                  <span>{usuario?.email}</span>
-                </div>
+              <div className="p-5 space-y-3">
+                <InfoPerfil icon={Mail} titulo="E-mail" valor={usuario?.email || 'Não informado'} />
+                <InfoPerfil icon={Shield} titulo="Perfil" valor={usuario?.perfil || 'Não informado'} />
+                <InfoPerfil icon={Building2} titulo="Setor" valor={usuario?.setor || 'Não informado'} />
 
-                <div className="flex items-center gap-3 text-slate-300 bg-slate-900/60 rounded-xl p-3">
-                  <Shield size={18} />
-                  <span>Perfil: {usuario?.perfil}</span>
-                </div>
-
-                <div className="flex items-center gap-3 text-slate-300 bg-slate-900/60 rounded-xl p-3">
-                  <User size={18} />
-                  <span>Setor: {usuario?.setor || 'Não informado'}</span>
-                </div>
+                <button
+                  onClick={() => {
+                    setAbrirPerfil(false)
+                    navigate('/usuarios')
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-600/15 text-blue-400 hover:bg-blue-600/25 transition rounded-2xl py-3 font-bold"
+                >
+                  <Settings size={18} />
+                  Meu perfil
+                </button>
               </div>
 
               <div className="border-t border-slate-800 p-4">
                 <button
                   onClick={sair}
-                  className="w-full flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 transition rounded-2xl py-3 font-semibold shadow-xl"
+                  className="w-full flex items-center justify-center gap-2 bg-red-500/90 hover:bg-red-600 transition rounded-2xl py-3 font-semibold shadow-xl"
                 >
                   <LogOut size={18} />
-                  Sair
+                  Sair da conta
                 </button>
               </div>
             </div>
@@ -369,6 +375,21 @@ function Topbar({ titulo }) {
         <span className="capitalize">
           {dataAtual}
         </span>
+      </div>
+    </div>
+  )
+}
+
+function InfoPerfil({ icon: Icon, titulo, valor }) {
+  return (
+    <div className="flex items-center gap-3 bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+      <div className="w-10 h-10 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center">
+        <Icon size={18} />
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500">{titulo}</p>
+        <p className="font-semibold text-slate-200 truncate">{valor}</p>
       </div>
     </div>
   )
