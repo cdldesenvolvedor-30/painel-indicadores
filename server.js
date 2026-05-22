@@ -1,5 +1,5 @@
 const app = require('./src/app');
-const { iniciarSincronizacaoAutomatica } = require('./src/services/digisacSync.service')
+const { iniciarSincronizacaoAutomatica } = require('./frontend/src/services/digisacSync.service')
 
 const PORT = 3000;
 

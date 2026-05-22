@@ -1,5 +1,5 @@
 const axios = require('axios')
-const pool = require('../database/connection')
+const pool = require('../../../src/database/connection')
 
 const digisacApi = axios.create({
   baseURL: process.env.DIGISAC_API_URL,
