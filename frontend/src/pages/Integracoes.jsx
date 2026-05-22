@@ -14,6 +14,7 @@ import {
 function Integracoes() {
   const [loading, setLoading] = useState(false)
   const [resultado, setResultado] = useState(null)
+  const [sincronizando, setSincronizando] = useState(false)
 
   async function testarDigisac() {
     try {
@@ -37,6 +38,30 @@ function Integracoes() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function sincronizarCRM() {
+    try {
+      setSincronizando(true)
+
+      const response = await api.post('/digisac/sincronizar-crm')
+
+      setResultado({
+        sucesso: true,
+        mensagem: `${response.data.total_importados} contatos sincronizados com sucesso`
+      })
+    } catch (error) {
+      console.error(error)
+
+      setResultado({
+        sucesso: false,
+        mensagem:
+          error.response?.data?.erro ||
+          'Erro ao sincronizar CRM'
+      })
+    } finally {
+      setSincronizando(false)
     }
   }
 
@@ -112,7 +137,7 @@ function Integracoes() {
             </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-8 flex flex-wrap gap-4">
             <button
               onClick={testarDigisac}
               disabled={loading}
@@ -131,6 +156,28 @@ function Integracoes() {
                 <>
                   <PlugZap size={20} />
                   Testar conexão
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={sincronizarCRM}
+              disabled={sincronizando}
+              className="bg-green-600 hover:bg-green-700 transition px-6 py-4 rounded-2xl font-bold flex items-center gap-3 disabled:opacity-50"
+            >
+              {sincronizando ? (
+                <>
+                  <Loader2
+                    size={20}
+                    className="animate-spin"
+                  />
+
+                  Sincronizando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={20} />
+                  Sincronizar CRM
                 </>
               )}
             </button>
@@ -153,8 +200,8 @@ function Integracoes() {
               <div>
                 <h3 className="font-bold text-lg">
                   {resultado.sucesso
-                    ? 'Conexão realizada'
-                    : 'Erro na conexão'}
+                    ? 'Operação realizada'
+                    : 'Erro na operação'}
                 </h3>
 
                 <p className="mt-1 opacity-90">
