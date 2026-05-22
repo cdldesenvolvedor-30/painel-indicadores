@@ -1,6 +1,6 @@
 const axios = require('axios')
-const pool = require('../../../src/database/connection')
-
+const pool = require('../database/connection')
+// sync digisac railway atualizado
 const digisacApi = axios.create({
   baseURL: process.env.DIGISAC_API_URL,
   headers: {
