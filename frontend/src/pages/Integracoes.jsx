@@ -34,8 +34,11 @@ function Integracoes() {
 
       const response = await api.get('/digisac/testar-conexao')
 
-      setStatus('conectado')
-      localStorage.setItem('digisac_status', 'conectado')
+      window.localStorage.setItem('digisac_status', 'conectado')
+
+setStatus(
+  window.localStorage.getItem('digisac_status')
+)
 
       setResultado({
         sucesso: true,
