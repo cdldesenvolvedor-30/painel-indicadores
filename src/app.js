@@ -7,6 +7,7 @@ const logsRoutes = require('./routes/logs.routes')
 const metasRoutes = require('./routes/metas.routes')
 const mapaPerformanceRoutes = require('./routes/mapaPerformance.routes')
 const crmRoutes = require('./routes/crm.routes')
+const digisacRoutes = require('./routes/digisac.routes')
 
 const colaboradoresRoutes = require('./routes/colaboradores.routes')
 const indicadoresRoutes = require('./routes/indicadores.routes')
@@ -34,5 +35,6 @@ app.use('/logs', logsRoutes)
 app.use('/metas', metasRoutes)
 app.use('/mapa-performance', mapaPerformanceRoutes)
 app.use('/crm', crmRoutes)
+app.use('/digisac', digisacRoutes)
 
 module.exports = app
