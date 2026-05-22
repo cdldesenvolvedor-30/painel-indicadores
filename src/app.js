@@ -22,7 +22,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-app.options('*', cors())
+app.use(cors({
+  origin: [
+    'https://painel-indicadores-beta.vercel.app',
+    'http://localhost:5173'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
 
 app.use(express.json())
 
