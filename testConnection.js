@@ -1,15 +1,10 @@
-const pool = require('./src/database/connection');
+const { Pool } = require('pg')
 
-async function testConnection() {
-    try {
-        const client = await pool.connect();
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+})
 
-        console.log('Banco conectado com sucesso 🚀');
-
-        client.release();
-    } catch (error) {
-        console.error('Erro ao conectar no banco:', error);
-    }
-}
-
-testConnection();
+module.exports = pool
