@@ -150,9 +150,51 @@ async function sincronizarCRM(req, res) {
   }
 }
 
+async function listarUsuarios(req, res) {
+  try {
+    const response = await digisacApi.get('/users')
+
+    res.json(normalizarLista(response.data))
+  } catch (error) {
+    res.status(500).json({
+      erro: 'Erro ao listar usuários da Digisac',
+      detalhes: error.response?.data || error.message
+    })
+  }
+}
+
+async function listarDepartamentos(req, res) {
+  try {
+    const response = await digisacApi.get('/departments')
+
+    res.json(normalizarLista(response.data))
+  } catch (error) {
+    res.status(500).json({
+      erro: 'Erro ao listar departamentos da Digisac',
+      detalhes: error.response?.data || error.message
+    })
+  }
+}
+
+async function listarFilas(req, res) {
+  try {
+    const response = await digisacApi.get('/queues')
+
+    res.json(normalizarLista(response.data))
+  } catch (error) {
+    res.status(500).json({
+      erro: 'Erro ao listar filas da Digisac',
+      detalhes: error.response?.data || error.message
+    })
+  }
+}
+
 module.exports = {
   testarConexao,
   listarContatos,
   listarTickets,
-  sincronizarCRM
+  sincronizarCRM,
+  listarUsuarios,
+  listarDepartamentos,
+  listarFilas
 }
