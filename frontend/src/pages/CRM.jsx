@@ -216,53 +216,38 @@ async function carregarFiltrosDigisac() {
               <CampoData label="Data inicial" value={inicio} onChange={setInicio} />
               <CampoData label="Data final" value={fim} onChange={setFim} />
 
-              <CampoSelect icon={Building2} value={unidade} onChange={setUnidade}>
-                <option value="">Todas as unidades</option>
-                
-                {unidadesDigisac.map((item) => (
-                   <option
-                     key={item.id || item.name}
-                     value={item.name || item.department || item.nome}
-                      >
-                    {item.name || item.department || item.nome}
-                  </option>
-                ))}
-              </CampoSelect>
-
-              <CampoSelect icon={User} value={colaboradorId} onChange={setColaboradorId}>
-                <option value="">Todos colaboradores</option>
-
-                {usuariosDigisac.map((usuario) => (
-                   <option
-                     key={usuario.id}
-                     value={usuario.id}
-                     >
-                    {usuario.name || usuario.nome}
-                  </option>
-                ))}
-              </CampoSelect>
-
-              <CampoSelect icon={MessageCircle} value={motivo} onChange={setMotivo}>
-                <option value="">Todos os assuntos</option>
-
-                {assuntosDigisac.map((fila) => (
-                   <option
-                     key={fila.id || fila.name}
-                     value={fila.name || fila.nome}
-                     >
-                    {fila.name || fila.nome}
-                  </option>
-                ))}
-              </CampoSelect>
-
-              <CampoSelect icon={VenusAndMars} value={sexo} onChange={setSexo}>
-                <option value="">Todos os sexos</option>
-                <option value="Feminino">Feminino</option>
-                <option value="Masculino">Masculino</option>
-                <option value="Outro">Outro</option>
-                <option value="Não informado">Não informado</option>
-              </CampoSelect>
-
+<CampoFiltro
+icon={Building2}
+placeholder="Todas as unidades"
+value={unidade}
+onChange={setUnidade}
+opcoes={unidadesDigisac.map((item) => item.name || item.nome ||
+item.department)}
+/>
+<CampoFiltro
+icon={User}
+placeholder="Todos colaboradores"
+value={colaboradorId}
+onChange={setColaboradorId}
+opcoes={usuariosDigisac.map((item) => ({
+label: item.name || item.nome,
+value: item.id
+}))}
+/>
+<CampoFiltro
+icon={MessageCircle}
+placeholder="Todos os assuntos"
+value={motivo}
+onChange={setMotivo}
+opcoes={assuntosDigisac.map((item) => item.name || item.nome)}
+/>
+<CampoFiltro
+icon={VenusAndMars}
+placeholder="Todos os sexos"
+value={sexo}
+onChange={setSexo}
+opcoes={['Feminino', 'Masculino', 'Outro', 'Não informado']}
+/>
               <Campo icon={FlaskConical} type="text" placeholder="Exame ou interesse" value={exame} onChange={setExame} />
 
               <button
@@ -654,6 +639,85 @@ function CampoData({ label, value, onChange }) {
           >
             Limpar data
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CampoFiltro({ icon: Icon, placeholder, value, onChange, opcoes = [] }) {
+  const [aberto, setAberto] = useState(false)
+  const [busca, setBusca] = useState('')
+
+  const lista = opcoes
+    .filter(Boolean)
+    .map((item) =>
+      typeof item === 'string'
+        ? { label: item, value: item }
+        : item
+    )
+    .filter((item) =>
+      item.label?.toLowerCase().includes(busca.toLowerCase())
+    )
+
+  const selecionado = lista.find((item) => String(item.value) === String(value))
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Icon size={18} className="absolute left-4 top-[18px] text-slate-400" />
+
+        <input
+          value={busca || selecionado?.label || value || ''}
+          onChange={(e) => {
+            setBusca(e.target.value)
+            onChange(e.target.value)
+            setAberto(true)
+          }}
+          onFocus={() => setAberto(true)}
+          placeholder={placeholder}
+          className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-white placeholder:text-slate-400 hover:border-blue-500/40 transition"
+        />
+      </div>
+
+      {aberto && (
+        <div className="absolute z-50 mt-3 w-full bg-[#020817] border border-blue-500/20 rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.55)] p-3 max-h-80 overflow-y-auto">
+          <button
+            type="button"
+            onClick={() => {
+              onChange('')
+              setBusca('')
+              setAberto(false)
+            }}
+            className="w-full text-left px-4 py-3 rounded-2xl text-slate-400 hover:bg-slate-900 transition"
+          >
+            {placeholder}
+          </button>
+
+          {lista.map((item) => (
+            <button
+              key={item.value}
+              type="button"
+              onClick={() => {
+                onChange(item.value)
+                setBusca('')
+                setAberto(false)
+              }}
+              className={`w-full text-left px-4 py-3 rounded-2xl transition ${
+                String(value) === String(item.value)
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-900'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+
+          {lista.length === 0 && (
+            <div className="px-4 py-4 text-sm text-slate-500">
+              Nenhum resultado encontrado.
+            </div>
+          )}
         </div>
       )}
     </div>
