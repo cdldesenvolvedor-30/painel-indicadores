@@ -49,6 +49,9 @@ function CRM() {
   const [exames, setExames] = useState([])
   const [atendimentos, setAtendimentos] = useState([])
   const [colaboradores, setColaboradores] = useState([])
+  const [unidadesDigisac, setUnidadesDigisac] = useState([])
+  const [usuariosDigisac, setUsuariosDigisac] = useState([])
+  const [assuntosDigisac, setAssuntosDigisac] = useState([])
 
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
@@ -69,6 +72,27 @@ function CRM() {
     exame
   }
 
+  useEffect(() => {
+  carregarFiltrosDigisac()
+}, [])
+
+async function carregarFiltrosDigisac() {
+  try {
+    const [unidadesRes, usuariosRes, assuntosRes] = await Promise.all([
+      api.get('/digisac/departamentos'),
+      api.get('/digisac/usuarios'),
+      api.get('/digisac/filas')
+    ])
+
+    setUnidadesDigisac(unidadesRes.data || [])
+    setUsuariosDigisac(usuariosRes.data || [])
+    setAssuntosDigisac(assuntosRes.data || [])
+  } catch (error) {
+    console.error(error)
+    toast.error('Erro ao carregar filtros da Digisac')
+  }
+}
+  
   async function carregarCRM() {
     try {
       setLoading(true)
