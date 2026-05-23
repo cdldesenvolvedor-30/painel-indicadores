@@ -8,7 +8,10 @@ const {
   testarConexao,
   listarContatos,
   listarTickets,
-  sincronizarCRM
+  sincronizarCRM,
+  listarUsuarios,
+  listarDepartamentos,
+  listarFilas
 } = require('../controllers/digisac.controller')
 
 router.use(authMiddleware)
@@ -17,5 +20,8 @@ router.get('/testar-conexao', testarConexao)
 router.get('/contatos', listarContatos)
 router.get('/tickets', listarTickets)
 router.post('/sincronizar-crm', sincronizarCRM)
+router.get('/usuarios', listarUsuarios)
+router.get('/departamentos', listarDepartamentos)
+router.get('/filas', listarFilas)
 
 module.exports = router
