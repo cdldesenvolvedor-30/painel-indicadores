@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  Database,
   MessageSquareMore,
   RefreshCw,
   Power,
@@ -19,13 +18,23 @@ function Integracoes() {
   const [resultado, setResultado] = useState(null)
   const [sincronizando, setSincronizando] = useState(false)
 
-  const [status, setStatus] = useState(() => {
-    return localStorage.getItem('digisac_status') || 'desconectado'
-  })
+  const [status, setStatus] = useState(
+    localStorage.getItem('digisac_status') || 'desconectado'
+  )
 
-  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(() => {
-    return localStorage.getItem('digisac_ultima_sincronizacao') || null
-  })
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(
+    localStorage.getItem('digisac_ultima_sincronizacao') || null
+  )
+
+  function salvarStatus(novoStatus) {
+    localStorage.setItem('digisac_status', novoStatus)
+    setStatus(novoStatus)
+  }
+
+  function salvarUltimaSincronizacao(data) {
+    localStorage.setItem('digisac_ultima_sincronizacao', data)
+    setUltimaSincronizacao(data)
+  }
 
   async function testarDigisac() {
     try {
@@ -34,21 +43,16 @@ function Integracoes() {
 
       const response = await api.get('/digisac/testar-conexao')
 
-      window.localStorage.setItem('digisac_status', 'conectado')
-
-setStatus(
-  window.localStorage.getItem('digisac_status')
-)
+      salvarStatus('conectado')
 
       setResultado({
         sucesso: true,
-        mensagem: response.data.mensagem
+        mensagem: response.data.mensagem || 'Conexão realizada com sucesso'
       })
     } catch (error) {
       console.error(error)
 
-      setStatus('falha')
-      localStorage.setItem('digisac_status', 'falha')
+      salvarStatus('falha')
 
       setResultado({
         sucesso: false,
@@ -78,8 +82,8 @@ setStatus(
 
       const agora = new Date().toLocaleString('pt-BR')
 
-      setUltimaSincronizacao(agora)
-      localStorage.setItem('digisac_ultima_sincronizacao', agora)
+      salvarUltimaSincronizacao(agora)
+      salvarStatus('conectado')
 
       setResultado({
         sucesso: true,
@@ -88,8 +92,7 @@ setStatus(
     } catch (error) {
       console.error(error)
 
-      setStatus('falha')
-      localStorage.setItem('digisac_status', 'falha')
+      salvarStatus('falha')
 
       setResultado({
         sucesso: false,
@@ -103,8 +106,9 @@ setStatus(
   }
 
   function desconectarDigisac() {
-    setStatus('desconectado')
-    localStorage.setItem('digisac_status', 'desconectado')
+    salvarStatus('desconectado')
+    localStorage.removeItem('digisac_ultima_sincronizacao')
+    setUltimaSincronizacao(null)
 
     setResultado({
       sucesso: true,
@@ -138,10 +142,7 @@ setStatus(
   return (
     <div className="px-8 py-6 space-y-8">
       <div>
-        <h1 className="text-4xl font-bold">
-          Integrações
-        </h1>
-
+        <h1 className="text-4xl font-bold">Integrações</h1>
         <p className="text-slate-400 mt-2">
           Gerencie integrações externas da plataforma.
         </p>
@@ -156,19 +157,14 @@ setStatus(
               </div>
 
               <div>
-                <h2 className="text-2xl font-bold">
-                  Digisac CRM
-                </h2>
-
+                <h2 className="text-2xl font-bold">Digisac CRM</h2>
                 <p className="text-slate-400 mt-1">
                   Integração de atendimentos e CRM.
                 </p>
               </div>
             </div>
 
-            <span
-              className={`text-xs px-3 py-1 rounded-full font-bold border ${statusConfig[status].classe}`}
-            >
+            <span className={`text-xs px-3 py-1 rounded-full font-bold border ${statusConfig[status].classe}`}>
               {statusConfig[status].texto}
             </span>
           </div>
@@ -177,10 +173,7 @@ setStatus(
             <div className={`border rounded-2xl p-4 ${statusConfig[status].classe}`}>
               <div className="flex items-center gap-3 mb-2">
                 <StatusIcon size={18} />
-
-                <span className="font-semibold">
-                  Status
-                </span>
+                <span className="font-semibold">Status</span>
               </div>
 
               <p className="text-sm opacity-90">
@@ -190,14 +183,8 @@ setStatus(
 
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4">
               <div className="flex items-center gap-3 mb-2">
-                <RefreshCw
-                  size={18}
-                  className="text-blue-400"
-                />
-
-                <span className="font-semibold">
-                  Última sincronização
-                </span>
+                <RefreshCw size={18} className="text-blue-400" />
+                <span className="font-semibold">Última sincronização</span>
               </div>
 
               <p className="text-sm text-slate-400">
@@ -254,24 +241,16 @@ setStatus(
           </div>
 
           {resultado && (
-            <div
-              className={`mt-6 rounded-2xl p-5 border flex items-start gap-4 ${
-                resultado.sucesso
-                  ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                  : 'bg-red-500/10 border-red-500/20 text-red-400'
-              }`}
-            >
-              {resultado.sucesso ? (
-                <CheckCircle2 size={24} />
-              ) : (
-                <XCircle size={24} />
-              )}
+            <div className={`mt-6 rounded-2xl p-5 border flex items-start gap-4 ${
+              resultado.sucesso
+                ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}>
+              {resultado.sucesso ? <CheckCircle2 size={24} /> : <XCircle size={24} />}
 
               <div>
                 <h3 className="font-bold text-lg">
-                  {resultado.sucesso
-                    ? 'Operação realizada'
-                    : 'Erro na operação'}
+                  {resultado.sucesso ? 'Operação realizada' : 'Erro na operação'}
                 </h3>
 
                 <p className="mt-1 opacity-90">
