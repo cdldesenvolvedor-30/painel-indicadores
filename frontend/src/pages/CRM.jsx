@@ -18,7 +18,9 @@ import {
   Building2,
   User,
   VenusAndMars,
-  MessageCircle
+  MessageCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 
 import {
@@ -31,9 +33,7 @@ import {
   Bar,
   XAxis,
   YAxis,
-  CartesianGrid,
-  ChevronLeft,
-  ChevronRight
+  CartesianGrid
 } from 'recharts'
 
 import api from '../services/api'
