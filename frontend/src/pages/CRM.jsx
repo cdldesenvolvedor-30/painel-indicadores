@@ -78,11 +78,9 @@ function CRM() {
 
 async function carregarFiltrosDigisac() {
   try {
-    const [unidadesRes, usuariosRes, assuntosRes] = await Promise.all([
-      api.get('/digisac/departamentos'),
-      api.get('/digisac/usuarios'),
-      api.get('/digisac/filas')
-    ])
+    const unidadesRes = await api.get('/digisac/departamentos').catch(() => ({ data: [] }))
+    const usuariosRes = await api.get('/digisac/usuarios').catch(() => ({ data: [] }))
+    const assuntosRes = await api.get('/digisac/filas').catch(() => ({ data: [] }))
 
     setUnidadesDigisac(unidadesRes.data || [])
     setUsuariosDigisac(usuariosRes.data || [])
