@@ -220,10 +220,13 @@ async function carregarFiltrosDigisac() {
 
               <CampoSelect icon={Building2} value={unidade} onChange={setUnidade}>
                 <option value="">Todas as unidades</option>
-
-                {unidades.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                
+                {unidadesDigisac.map((item) => (
+                   <option
+                     key={item.id || item.name}
+                     value={item.name || item.department || item.nome}
+                      >
+                    {item.name || item.department || item.nome}
                   </option>
                 ))}
               </CampoSelect>
@@ -231,19 +234,25 @@ async function carregarFiltrosDigisac() {
               <CampoSelect icon={User} value={colaboradorId} onChange={setColaboradorId}>
                 <option value="">Todos colaboradores</option>
 
-                {colaboradores.map((colaborador) => (
-                  <option key={colaborador.id} value={colaborador.id}>
-                    {colaborador.nome}
+                {usuariosDigisac.map((usuario) => (
+                   <option
+                     key={usuario.id}
+                     value={usuario.id}
+                     >
+                    {usuario.name || usuario.nome}
                   </option>
                 ))}
               </CampoSelect>
 
               <CampoSelect icon={MessageCircle} value={motivo} onChange={setMotivo}>
-                <option value="">Todos os motivos</option>
+                <option value="">Todos os assuntos</option>
 
-                {motivos.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                {assuntosDigisac.map((fila) => (
+                   <option
+                     key={fila.id || fila.name}
+                     value={fila.name || fila.nome}
+                     >
+                    {fila.name || fila.nome}
                   </option>
                 ))}
               </CampoSelect>
