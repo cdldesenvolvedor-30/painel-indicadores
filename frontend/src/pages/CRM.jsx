@@ -106,31 +106,17 @@ const tickets = Array.isArray(assuntosRes.data)
   ? assuntosRes.data
   : assuntosRes.data?.data || []
 
-const assuntosUnicos = [
-  ...new Set(
-    tickets
-      .map((ticket) => {
-        const departamento = departamentos.find(
-          (dep) => dep.id === ticket.departmentId
-        )
-
-        return (
-          departamento?.name ||
-          departamento?.nome ||
-          departamento?.department ||
-          ticket.departmentId
-        )
-      })
-      .filter(Boolean)
-  )
-]
+const tags = Array.isArray(assuntosRes.data)
+  ? assuntosRes.data
+  : assuntosRes.data?.data || []
 
 setAssuntosDigisac(
-  assuntosUnicos.map((item) => ({
-    id: item,
-    name: item
+  tags.map((tag) => ({
+    id: tag.id,
+    name: tag.label
   }))
 )
+    
   } catch (error) {
     console.error(error)
     toast.error('Erro ao carregar filtros da Digisac')
