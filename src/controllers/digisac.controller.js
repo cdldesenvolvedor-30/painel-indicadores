@@ -261,5 +261,6 @@ module.exports = {
   listarUsuarios,
   listarDepartamentos,
   listarFilas,
-  debugAssuntosDigisac
+  debugAssuntosDigisac,
+  listarTags
 }
