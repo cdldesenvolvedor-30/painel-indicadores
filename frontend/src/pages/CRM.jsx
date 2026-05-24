@@ -87,7 +87,7 @@ async function carregarFiltrosDigisac() {
       .catch(() => ({ data: [] }))
 
     const assuntosRes = await api
-      .get('/digisac/tickets')
+      .get('/digisac/tags')
       .catch(() => ({ data: [] }))
 
     setUnidadesDigisac(unidadesRes.data || [])
