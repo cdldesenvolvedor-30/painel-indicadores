@@ -605,13 +605,6 @@ function CampoData({ label, value, onChange }) {
     }
   }}
 
-  onBlur={() => {
-    if (digitado) {
-      onChange(digitado)
-      setDataBase(new Date(digitado + 'T00:00:00'))
-    }
-  }}
-
   className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-white placeholder:text-slate-400 hover:border-blue-500/40 transition"
 />
 
