@@ -240,6 +240,19 @@ async function debugAssuntosDigisac(req, res) {
   res.json(resultados)
 }
 
+async function listarTags(req, res) {
+  try {
+    const response = await digisacApi.get('/tags')
+
+    res.json(response.data)
+  } catch (error) {
+    res.status(500).json({
+      erro: 'Erro ao listar tags da Digisac',
+      detalhes: error.response?.data || error.message
+    })
+  }
+}
+
 module.exports = {
   testarConexao,
   listarContatos,
