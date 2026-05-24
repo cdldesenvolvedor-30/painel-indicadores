@@ -584,13 +584,7 @@ function CampoData({ label, value, onChange }) {
   function aplicarDataManual(e) {
   const valor = e.target.value
   setDigitado(valor)
-}
-
-    if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-      onChange(valor)
-      setDataBase(new Date(valor + 'T00:00:00'))
-    }
-  }
+    } 
 
   return (
     <div className="relative">
