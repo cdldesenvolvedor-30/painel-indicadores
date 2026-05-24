@@ -13,7 +13,7 @@ const {
   listarDepartamentos,
   listarFilas,
   debugAssuntosDigisac,
-  listarTags
+  listarAssuntos
 } = require('../controllers/digisac.controller')
 
 router.get('/debug-assuntos', debugAssuntosDigisac)
@@ -27,6 +27,6 @@ router.post('/sincronizar-crm', sincronizarCRM)
 router.get('/usuarios', listarUsuarios)
 router.get('/departamentos', listarDepartamentos)
 router.get('/filas', listarFilas)
-router.get('/tags', listarTags)
+router.get('/assuntos', listarAssuntos)
 
 module.exports = router
