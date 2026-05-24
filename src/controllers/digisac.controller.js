@@ -189,6 +189,57 @@ async function listarFilas(req, res) {
   }
 }
 
+async function debugAssuntosDigisac(req, res) {
+  const endpoints = [
+    '/subjects',
+    '/ticket-subjects',
+    '/ticketSubjects',
+    '/ticket-topics',
+    '/ticketTopics',
+    '/topics',
+    '/reasons',
+    '/ticket-reasons',
+    '/ticketReasons',
+    '/closing-reasons',
+    '/closingReasons',
+    '/tags',
+    '/classifications',
+    '/ticket-classifications',
+    '/ticketClassifications'
+  ]
+
+  const resultados = []
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await digisacApi.get(endpoint, {
+        params: {
+          limit: 20
+        }
+      })
+
+      resultados.push({
+        endpoint,
+        status: 'OK',
+        exemplo: Array.isArray(response.data)
+          ? response.data.slice(0, 3)
+          : response.data?.data
+            ? response.data.data.slice(0, 3)
+            : response.data
+      })
+    } catch (error) {
+      resultados.push({
+        endpoint,
+        status: 'ERRO',
+        codigo: error.response?.status,
+        erro: error.response?.data || error.message
+      })
+    }
+  }
+
+  res.json(resultados)
+}
+
 module.exports = {
   testarConexao,
   listarContatos,
@@ -196,5 +247,6 @@ module.exports = {
   sincronizarCRM,
   listarUsuarios,
   listarDepartamentos,
-  listarFilas
+  listarFilas,
+  debugAssuntosDigisac
 }
