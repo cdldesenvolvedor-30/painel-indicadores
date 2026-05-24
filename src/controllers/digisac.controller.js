@@ -240,14 +240,14 @@ async function debugAssuntosDigisac(req, res) {
   res.json(resultados)
 }
 
-async function listarTags(req, res) {
+async function listarAssuntos(req, res) {
   try {
-    const response = await digisacApi.get('/tags')
+    const response = await digisacApi.get('/ticket-topics')
 
     res.json(response.data)
   } catch (error) {
     res.status(500).json({
-      erro: 'Erro ao listar tags da Digisac',
+      erro: 'Erro ao listar assuntos da Digisac',
       detalhes: error.response?.data || error.message
     })
   }
@@ -262,5 +262,5 @@ module.exports = {
   listarDepartamentos,
   listarFilas,
   debugAssuntosDigisac,
-  listarTags
+  listarAssuntos
 }
