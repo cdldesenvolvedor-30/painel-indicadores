@@ -554,6 +554,7 @@ function Info({ titulo, valor, verde }) {
 
 function CampoData({ label, value, onChange }) {
   const [aberto, setAberto] = useState(false)
+  const [digitado, setDigitado] = useState(value || '')
   const [dataBase, setDataBase] = useState(value ? new Date(value) : new Date())
 
   const ano = dataBase.getFullYear()
@@ -564,18 +565,14 @@ function CampoData({ label, value, onChange }) {
 
   const dias = []
 
-  for (let i = 0; i < primeiroDia; i++) {
-    dias.push(null)
-  }
-
-  for (let dia = 1; dia <= totalDias; dia++) {
-    dias.push(dia)
-  }
+  for (let i = 0; i < primeiroDia; i++) dias.push(null)
+  for (let dia = 1; dia <= totalDias; dia++) dias.push(dia)
 
   function selecionarDia(dia) {
     const data = new Date(ano, mes, dia)
     const formatada = data.toISOString().split('T')[0]
 
+    setDigitado(formatada)
     onChange(formatada)
     setAberto(false)
   }
@@ -584,67 +581,53 @@ function CampoData({ label, value, onChange }) {
     setDataBase(new Date(ano, mes + valor, 1))
   }
 
-  function formatarData(data) {
-    if (!data) return label
+  function aplicarDataManual(e) {
+    const valor = e.target.value
+    setDigitado(valor)
 
-    return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+      onChange(valor)
+      setDataBase(new Date(valor + 'T00:00:00'))
+    }
   }
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setAberto(!aberto)}
-        className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-left relative hover:border-blue-500/40 transition"
-      >
+      <div className="relative">
         <CalendarDays size={18} className="absolute left-4 top-[18px] text-slate-400" />
 
-        <span className={value ? 'text-white' : 'text-slate-400'}>
-          {formatarData(value)}
-        </span>
-      </button>
+        <input
+          type="date"
+          value={digitado}
+          onChange={aplicarDataManual}
+          onFocus={() => setAberto(true)}
+          className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-white placeholder:text-slate-400 hover:border-blue-500/40 transition"
+        />
+      </div>
 
       {aberto && (
         <div className="absolute z-50 mt-3 w-80 bg-[#020817] border border-blue-500/20 rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.55)] p-5">
           <div className="flex items-center justify-between mb-5">
-            <button
-              type="button"
-              onClick={() => mudarMes(-1)}
-              className="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 flex items-center justify-center"
-            >
+            <button type="button" onClick={() => mudarMes(-1)} className="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 flex items-center justify-center">
               <ChevronLeft size={18} />
             </button>
 
             <h3 className="font-bold capitalize">
-              {dataBase.toLocaleDateString('pt-BR', {
-                month: 'long',
-                year: 'numeric'
-              })}
+              {dataBase.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </h3>
 
-            <button
-              type="button"
-              onClick={() => mudarMes(1)}
-              className="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 flex items-center justify-center"
-            >
+            <button type="button" onClick={() => mudarMes(1)} className="w-9 h-9 rounded-xl bg-slate-900 hover:bg-slate-800 flex items-center justify-center">
               <ChevronRight size={18} />
             </button>
           </div>
 
           <div className="grid grid-cols-7 gap-2 text-center text-xs text-slate-500 mb-2">
-            <span>D</span>
-            <span>S</span>
-            <span>T</span>
-            <span>Q</span>
-            <span>Q</span>
-            <span>S</span>
-            <span>S</span>
+            <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
           </div>
 
           <div className="grid grid-cols-7 gap-2">
             {dias.map((dia, index) => {
-              const selecionado =
-                value === new Date(ano, mes, dia).toISOString().split('T')[0]
+              const selecionado = dia && value === new Date(ano, mes, dia).toISOString().split('T')[0]
 
               return (
                 <button
@@ -669,6 +652,7 @@ function CampoData({ label, value, onChange }) {
           <button
             type="button"
             onClick={() => {
+              setDigitado('')
               onChange('')
               setAberto(false)
             }}
