@@ -98,10 +98,6 @@ async function carregarFiltrosDigisac() {
         : usuariosRes.data?.data || []
     )
 
-    const tickets = Array.isArray(assuntosRes.data)
-      ? assuntosRes.data
-      : assuntosRes.data?.data || []
-
     const departamentos = Array.isArray(unidadesRes.data)
   ? unidadesRes.data
   : unidadesRes.data?.data || []
