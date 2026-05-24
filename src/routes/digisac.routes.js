@@ -15,6 +15,8 @@ const {
   debugAssuntosDigisac
 } = require('../controllers/digisac.controller')
 
+router.get('/debug-assuntos', debugAssuntosDigisac)
+
 router.use(authMiddleware)
 
 router.get('/testar-conexao', testarConexao)
@@ -24,6 +26,5 @@ router.post('/sincronizar-crm', sincronizarCRM)
 router.get('/usuarios', listarUsuarios)
 router.get('/departamentos', listarDepartamentos)
 router.get('/filas', listarFilas)
-router.get('/debug-assuntos', debugAssuntosDigisac)
 
 module.exports = router
