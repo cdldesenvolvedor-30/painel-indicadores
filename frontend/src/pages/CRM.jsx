@@ -102,26 +102,39 @@ async function carregarFiltrosDigisac() {
       ? assuntosRes.data
       : assuntosRes.data?.data || []
 
-    const assuntosUnicos = [
-      ...new Set(
-        tickets
-          .map((item) =>
-            item.subject ||
-            item.department?.name ||
-            item.queue?.name ||
-            item.title ||
-            item.reason
-          )
-          .filter(Boolean)
-      )
-    ]
+    const departamentos = Array.isArray(unidadesRes.data)
+  ? unidadesRes.data
+  : unidadesRes.data?.data || []
 
-    setAssuntosDigisac(
-      assuntosUnicos.map((item) => ({
-        id: item,
-        name: item
-      }))
-    )
+const tickets = Array.isArray(assuntosRes.data)
+  ? assuntosRes.data
+  : assuntosRes.data?.data || []
+
+const assuntosUnicos = [
+  ...new Set(
+    tickets
+      .map((ticket) => {
+        const departamento = departamentos.find(
+          (dep) => dep.id === ticket.departmentId
+        )
+
+        return (
+          departamento?.name ||
+          departamento?.nome ||
+          departamento?.department ||
+          ticket.departmentId
+        )
+      })
+      .filter(Boolean)
+  )
+]
+
+setAssuntosDigisac(
+  assuntosUnicos.map((item) => ({
+    id: item,
+    name: item
+  }))
+)
   } catch (error) {
     console.error(error)
     toast.error('Erro ao carregar filtros da Digisac')
