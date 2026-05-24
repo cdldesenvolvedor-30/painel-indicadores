@@ -582,8 +582,9 @@ function CampoData({ label, value, onChange }) {
   }
 
   function aplicarDataManual(e) {
-    const valor = e.target.value
-    setDigitado(valor)
+  const valor = e.target.value
+  setDigitado(valor)
+}
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
       onChange(valor)
@@ -597,13 +598,28 @@ function CampoData({ label, value, onChange }) {
         <CalendarDays size={18} className="absolute left-4 top-[18px] text-slate-400" />
 
         <input
-          type="date"
-          value={digitado}
-          onChange={aplicarDataManual}
-          onFocus={() => setAberto(true)}
-          className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-white placeholder:text-slate-400 hover:border-blue-500/40 transition"
-        />
-      </div>
+  type="date"
+  value={digitado}
+  onChange={aplicarDataManual}
+  onFocus={() => setAberto(true)}
+
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' && digitado) {
+      onChange(digitado)
+      setDataBase(new Date(digitado + 'T00:00:00'))
+      setAberto(false)
+    }
+  }}
+
+  onBlur={() => {
+    if (digitado) {
+      onChange(digitado)
+      setDataBase(new Date(digitado + 'T00:00:00'))
+    }
+  }}
+
+  className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-white placeholder:text-slate-400 hover:border-blue-500/40 transition"
+/>
 
       {aberto && (
         <div className="absolute z-50 mt-3 w-80 bg-[#020817] border border-blue-500/20 rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.55)] p-5">
