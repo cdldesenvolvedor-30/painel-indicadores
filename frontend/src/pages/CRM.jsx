@@ -607,7 +607,8 @@ function CampoData({ label, value, onChange }) {
 
   className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none text-white placeholder:text-slate-400 hover:border-blue-500/40 transition"
 />
-
+</div>
+      
       {aberto && (
         <div className="absolute z-50 mt-3 w-80 bg-[#020817] border border-blue-500/20 rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.55)] p-5">
           <div className="flex items-center justify-between mb-5">
