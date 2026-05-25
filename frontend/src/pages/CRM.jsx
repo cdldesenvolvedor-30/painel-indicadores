@@ -53,6 +53,8 @@ function CRM() {
   const [usuariosDigisac, setUsuariosDigisac] = useState([])
   const [assuntosDigisac, setAssuntosDigisac] = useState([])
 
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(null)
+
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
   const [unidade, setUnidade] = useState('')
@@ -151,6 +153,9 @@ setAssuntosDigisac(
       setColaboradores(
         colaboradoresResponse.data.filter((item) => item.status === 'Ativo')
       )
+
+      setUltimaAtualizacao(new Date())
+      
     } catch (error) {
       console.error(error)
       toast.error('Erro ao carregar CRM')
@@ -171,8 +176,14 @@ setAssuntosDigisac(
   }
 
   useEffect(() => {
+  carregarCRM()
+
+  const interval = setInterval(() => {
     carregarCRM()
-  }, [inicio, fim, unidade, colaboradorId, motivo, sexo, exame])
+  }, 60000)
+
+  return () => clearInterval(interval)
+}, [inicio, fim, unidade, colaboradorId, motivo, sexo, exame])
 
   const unidades = useMemo(() => {
     return [...new Set(atendimentos.map((item) => item.unidade).filter(Boolean))]
@@ -225,6 +236,11 @@ setAssuntosDigisac(
             <p className="text-slate-400 mt-2 text-lg">
               Inteligência comercial, triagem de pacientes e performance do atendimento.
             </p>
+            {ultimaAtualizacao && (
+  <p className="text-xs text-slate-400 mt-2">
+    Última atualização: {ultimaAtualizacao.toLocaleTimeString('pt-BR')}
+  </p>
+)}
           </section>
 
           <section className="glass-card rounded-[28px] p-6 mb-8">
