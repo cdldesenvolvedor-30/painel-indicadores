@@ -177,13 +177,15 @@ setAssuntosDigisac(
 
   useEffect(() => {
   carregarCRM()
+}, [inicio, fim, unidade, colaboradorId, motivo, sexo, exame])
 
+useEffect(() => {
   const interval = setInterval(() => {
     carregarCRM()
   }, 60000)
 
   return () => clearInterval(interval)
-}, [inicio, fim, unidade, colaboradorId, motivo, sexo, exame])
+}, [])
 
   const unidades = useMemo(() => {
     return [...new Set(atendimentos.map((item) => item.unidade).filter(Boolean))]
