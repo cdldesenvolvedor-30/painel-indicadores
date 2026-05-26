@@ -1,46 +1,36 @@
 const jwt = require('jsonwebtoken')
 
 function perfilMiddleware(perfisPermitidos) {
+  return (req, res, next) => {
+    try {
+      const authHeader = req.headers.authorization
 
-    return (req, res, next) => {
+      if (!authHeader) {
+        return res.status(401).json({
+          erro: 'Token não enviado'
+        })
+      }
 
-        try {
+      const token = authHeader.split(' ')[1]
 
-            const authHeader =
-                req.headers.authorization
+      const decoded = jwt.verify(
+        token,
+        process.env.JWT_SECRET || 'segredo_temporario'
+      )
 
-            const token =
-                authHeader.split(' ')[1]
+      if (!perfisPermitidos.includes(decoded.perfil)) {
+        return res.status(403).json({
+          erro: 'Sem permissão'
+        })
+      }
 
-            const decoded = jwt.verify(
-                token,
-                'segredo_temporario'
-            )
-
-            if (
-                !perfisPermitidos.includes(
-                    decoded.perfil
-                )
-            ) {
-
-                return res.status(403).json({
-                    erro: 'Sem permissão'
-                })
-
-            }
-
-            next()
-
-        } catch (error) {
-
-            return res.status(401).json({
-                erro: 'Token inválido'
-            })
-
-        }
-
+      next()
+    } catch (error) {
+      return res.status(401).json({
+        erro: 'Token inválido'
+      })
     }
-
+  }
 }
 
 module.exports = perfilMiddleware
