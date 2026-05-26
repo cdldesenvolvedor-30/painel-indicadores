@@ -57,22 +57,36 @@ async function sincronizarDigisacCRM() {
         contato.data?.email ||
         null
 
-      const existe = await pool.query(
-        `
-        SELECT id
-        FROM crm_atendimentos
-        WHERE paciente_telefone = $1
-          AND canal = 'Digisac'
-        LIMIT 1
-        `,
-        [telefone]
-      )
+     const existe = await pool.query(
+  'SELECT id FROM crm_atendimentos WHERE protocolo = $1',
+  [ticket.id]
+)
 
-      if (existe.rows.length > 0) {
-        ignorados++
-        continue
-      }
+if (existe.rows.length > 0) {
 
+  await pool.query(
+    `
+    UPDATE crm_atendimentos
+    SET
+      nome = $1,
+      telefone = $2,
+      unidade = $3,
+      motivo_contato = $4,
+      updated_at = NOW()
+    WHERE protocolo = $5
+    `,
+    [
+      ticket.contact?.name || 'Sem nome',
+      ticket.contact?.number || '',
+      ticket.department?.name || '',
+      ticket.subject || '',
+      ticket.id
+    ]
+  )
+
+  ignorados++
+  continue
+}
       await pool.query(
         `
         INSERT INTO crm_atendimentos
