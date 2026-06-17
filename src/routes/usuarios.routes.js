@@ -11,10 +11,16 @@ const {
     atualizarUsuario,
     desativarUsuario,
     atualizarFotoUsuario,
-    redefinirSenhaUsuario
+    redefinirSenhaUsuario,
+    atualizarMeuPerfil
 } = require('../controllers/usuarios.controller')
 
 router.use(authMiddleware)
+
+router.patch(
+  '/meu-perfil',
+  atualizarMeuPerfil
+)
 
 router.get(
     '/',
