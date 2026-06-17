@@ -298,10 +298,63 @@ async function atualizarFotoUsuario(req, res) {
     }
 }
 
+async function redefinirSenhaUsuario(req, res) {
+  try {
+    const { id } = req.params
+    const { novaSenha } = req.body
+
+    if (!novaSenha || novaSenha.length < 6) {
+      return res.status(400).json({
+        erro: 'A nova senha deve ter pelo menos 6 caracteres'
+      })
+    }
+
+    const senhaCriptografada = await bcrypt.hash(novaSenha, 10)
+
+    const result = await pool.query(
+      `
+      UPDATE usuarios
+      SET senha = $1
+      WHERE id = $2
+      RETURNING id, nome, email
+      `,
+      [senhaCriptografada, id]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        erro: 'Usuário não encontrado'
+      })
+    }
+
+    await pool.query(
+      `
+      INSERT INTO logs (usuario_id, acao)
+      VALUES ($1, $2)
+      `,
+      [
+        req.usuario.id,
+        `Redefiniu a senha do usuário ID ${id}`
+      ]
+    )
+
+    res.json({
+      mensagem: 'Senha redefinida com sucesso'
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      erro: 'Erro ao redefinir senha'
+    })
+  }
+}
+
 module.exports = {
     listarUsuarios,
     criarUsuario,
     atualizarUsuario,
     desativarUsuario,
-    atualizarFotoUsuario
+    atualizarFotoUsuario,
+    redefinirSenhaUsuario
 }
