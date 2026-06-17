@@ -350,11 +350,114 @@ async function redefinirSenhaUsuario(req, res) {
   }
 }
 
+
+async function atualizarMeuPerfil(req, res) {
+  try {
+    const usuarioId = req.usuario.id
+    const {
+      nome,
+      email,
+      setor,
+      foto_url,
+      novaSenha
+    } = req.body
+
+    if (!nome || !email) {
+      return res.status(400).json({
+        erro: 'Nome e e-mail são obrigatórios'
+      })
+    }
+
+    const emailExistente = await pool.query(
+      `
+      SELECT id
+      FROM usuarios
+      WHERE email = $1
+      AND id <> $2
+      `,
+      [email, usuarioId]
+    )
+
+    if (emailExistente.rows.length > 0) {
+      return res.status(400).json({
+        erro: 'Este e-mail já está sendo usado por outro usuário'
+      })
+    }
+
+    let senhaCriptografada = null
+
+    if (novaSenha) {
+      if (novaSenha.length < 6) {
+        return res.status(400).json({
+          erro: 'A nova senha deve ter pelo menos 6 caracteres'
+        })
+      }
+
+      senhaCriptografada = await bcrypt.hash(novaSenha, 10)
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE usuarios
+      SET
+        nome = $1,
+        email = $2,
+        setor = $3,
+        foto_url = $4,
+        senha = COALESCE($5, senha)
+      WHERE id = $6
+      RETURNING
+        id,
+        nome,
+        email,
+        perfil,
+        setor,
+        status,
+        foto_url
+      `,
+      [
+        nome,
+        email,
+        setor || null,
+        foto_url || null,
+        senhaCriptografada,
+        usuarioId
+      ]
+    )
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        erro: 'Usuário não encontrado'
+      })
+    }
+
+    await pool.query(
+      `
+      INSERT INTO logs (usuario_id, acao)
+      VALUES ($1, $2)
+      `,
+      [usuarioId, 'Atualizou o próprio perfil']
+    )
+
+    res.json({
+      mensagem: 'Perfil atualizado com sucesso',
+      usuario: result.rows[0]
+    })
+  } catch (error) {
+    console.error(error)
+
+    res.status(500).json({
+      erro: 'Erro ao atualizar perfil'
+    })
+  }
+}
+
 module.exports = {
     listarUsuarios,
     criarUsuario,
     atualizarUsuario,
     desativarUsuario,
     atualizarFotoUsuario,
-    redefinirSenhaUsuario
+    redefinirSenhaUsuario,
+    atualizarMeuPerfil
 }
