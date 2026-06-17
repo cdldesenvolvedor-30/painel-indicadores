@@ -39,8 +39,28 @@ async function sincronizarColaboradoresDigisac() {
 
     await prepararTabelaColaboradores()
 
-    const response = await digisacApi.get('/users')
-    const usuarios = normalizarLista(response.data)
+let usuarios = []
+let page = 1
+let continuar = true
+
+while (continuar) {
+  const response = await digisacApi.get('/users', {
+    params: {
+      page,
+      limit: 100
+    }
+  })
+
+  const lista = normalizarLista(response.data)
+
+  usuarios = [...usuarios, ...lista]
+
+  if (lista.length < 100) {
+    continuar = false
+  } else {
+    page++
+  }
+}
 
     let sincronizados = 0
     let criados = 0
