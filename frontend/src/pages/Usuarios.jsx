@@ -29,6 +29,12 @@ const PERFIS = [
   { value: 'admin', label: 'Administrador' }
 ]
 
+const TODOS_INDICADORES = {
+  Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
+  Shift: [],
+  Gestão: ['Colaboradores', 'Integrações', 'Usuários', 'Auditoria']
+}
+
 const PERMISSOES_POR_PERFIL = {
   admin: {
     Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
@@ -67,10 +73,16 @@ const PERMISSOES_POR_PERFIL = {
   }
 }
 
-const TODOS_INDICADORES = {
-  Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
-  Shift: [],
-  Gestão: ['Colaboradores', 'Integrações', 'Usuários', 'Auditoria']
+function clonarPermissoes(permissoes) {
+  return {
+    Digisac: [...(permissoes?.Digisac || [])],
+    Shift: [...(permissoes?.Shift || [])],
+    Gestão: [...(permissoes?.Gestão || [])]
+  }
+}
+
+function permissoesDoPerfil(perfil) {
+  return clonarPermissoes(PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.usuario)
 }
 
 function Usuarios() {
@@ -82,6 +94,7 @@ function Usuarios() {
   const [senha, setSenha] = useState('')
   const [perfil, setPerfil] = useState('usuario')
   const [setor, setSetor] = useState('')
+  const [permissoes, setPermissoes] = useState(permissoesDoPerfil('usuario'))
 
   const [editandoId, setEditandoId] = useState(null)
   const [editNome, setEditNome] = useState('')
@@ -89,6 +102,17 @@ function Usuarios() {
   const [editPerfil, setEditPerfil] = useState('usuario')
   const [editSetor, setEditSetor] = useState('')
   const [editStatus, setEditStatus] = useState('Ativo')
+  const [editPermissoes, setEditPermissoes] = useState(permissoesDoPerfil('usuario'))
+
+  function alterarPerfilNovo(valor) {
+    setPerfil(valor)
+    setPermissoes(permissoesDoPerfil(valor))
+  }
+
+  function alterarPerfilEdicao(valor) {
+    setEditPerfil(valor)
+    setEditPermissoes(permissoesDoPerfil(valor))
+  }
 
   async function carregarUsuarios() {
     try {
@@ -115,7 +139,8 @@ function Usuarios() {
         email,
         senha,
         perfil,
-        setor
+        setor,
+        permissoes
       })
 
       toast.success('Usuário cadastrado com sucesso 🚀')
@@ -125,6 +150,7 @@ function Usuarios() {
       setSenha('')
       setPerfil('usuario')
       setSetor('')
+      setPermissoes(permissoesDoPerfil('usuario'))
 
       carregarUsuarios()
     } catch (error) {
@@ -145,6 +171,7 @@ function Usuarios() {
     setEditPerfil(usuario.perfil)
     setEditSetor(usuario.setor || '')
     setEditStatus(usuario.status || 'Ativo')
+    setEditPermissoes(usuario.permissoes ? clonarPermissoes(usuario.permissoes) : permissoesDoPerfil(usuario.perfil))
   }
 
   async function salvarEdicao(id) {
@@ -154,7 +181,8 @@ function Usuarios() {
         email: editEmail,
         perfil: editPerfil,
         setor: editSetor,
-        status: editStatus
+        status: editStatus,
+        permissoes: editPermissoes
       })
 
       toast.success('Usuário atualizado com sucesso 🚀')
@@ -297,7 +325,7 @@ function Usuarios() {
           <CampoSelect
             icon={Shield}
             value={perfil}
-            onChange={setPerfil}
+            onChange={alterarPerfilNovo}
           >
             {PERFIS.map((item) => (
               <option key={item.value} value={item.value}>
@@ -307,7 +335,10 @@ function Usuarios() {
           </CampoSelect>
 
           <div className="xl:col-span-5">
-            <PermissoesPreview perfil={perfil} />
+            <PermissoesEditor
+              permissoes={permissoes}
+              setPermissoes={setPermissoes}
+            />
           </div>
 
           <button
@@ -380,7 +411,7 @@ function Usuarios() {
 
                       <select
                         value={editPerfil}
-                        onChange={(e) => setEditPerfil(e.target.value)}
+                        onChange={(e) => alterarPerfilEdicao(e.target.value)}
                         className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
                       >
                         {PERFIS.map((item) => (
@@ -408,7 +439,10 @@ function Usuarios() {
                       </button>
                     </div>
 
-                    <PermissoesPreview perfil={editPerfil} />
+                    <PermissoesEditor
+                      permissoes={editPermissoes}
+                      setPermissoes={setEditPermissoes}
+                    />
                   </div>
                 ) : (
                   <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
@@ -492,61 +526,99 @@ function Usuarios() {
   )
 }
 
-function PermissoesPreview({ perfil }) {
-  const permissoes = PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.usuario
+function PermissoesEditor({ permissoes, setPermissoes }) {
+  function moduloEstaAtivo(modulo) {
+    const indicadores = TODOS_INDICADORES[modulo] || []
+
+    if (indicadores.length === 0) {
+      return Boolean(permissoes[modulo]?.includes('__MODULO__'))
+    }
+
+    return indicadores.every((indicador) =>
+      (permissoes[modulo] || []).includes(indicador)
+    )
+  }
+
+  function alternarModulo(modulo) {
+    const indicadores = TODOS_INDICADORES[modulo] || []
+
+    setPermissoes((atual) => {
+      const novo = clonarPermissoes(atual)
+      const ativo = moduloEstaAtivo(modulo)
+
+      if (indicadores.length === 0) {
+        novo[modulo] = ativo ? [] : ['__MODULO__']
+      } else {
+        novo[modulo] = ativo ? [] : [...indicadores]
+      }
+
+      return novo
+    })
+  }
+
+  function alternarIndicador(modulo, indicador) {
+    setPermissoes((atual) => {
+      const novo = clonarPermissoes(atual)
+      const listaAtual = novo[modulo] || []
+
+      if (listaAtual.includes(indicador)) {
+        novo[modulo] = listaAtual.filter((item) => item !== indicador)
+      } else {
+        novo[modulo] = [...listaAtual, indicador]
+      }
+
+      return novo
+    })
+  }
 
   return (
     <div className="bg-slate-950/50 soft-border rounded-[24px] p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="font-bold text-white">
-            Permissões automáticas do perfil
+            Permissões do usuário
           </p>
 
           <p className="text-slate-500 text-xs mt-1">
-            Nesta fase, as permissões são aplicadas conforme o perfil selecionado.
+            Você pode marcar ou desmarcar cada aba e indicador manualmente.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {Object.entries(TODOS_INDICADORES).map(([modulo, indicadores]) => {
-          const moduloAtivo = (permissoes[modulo] || []).length > 0 || (modulo === 'Shift' && perfil === 'gestao')
+        {Object.entries(TODOS_INDICADORES).map(([modulo, indicadores]) => (
+          <div key={modulo} className="bg-slate-900/60 rounded-2xl p-4 border border-slate-800">
+            <label className="flex items-center gap-3 font-bold mb-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={moduloEstaAtivo(modulo)}
+                onChange={() => alternarModulo(modulo)}
+                className="accent-blue-600"
+              />
+              {modulo}
+            </label>
 
-          return (
-            <div key={modulo} className="bg-slate-900/60 rounded-2xl p-4 border border-slate-800">
-              <label className="flex items-center gap-3 font-bold mb-3">
-                <input
-                  type="checkbox"
-                  checked={moduloAtivo}
-                  readOnly
-                  className="accent-blue-600"
-                />
-                {modulo}
-              </label>
-
-              {indicadores.length === 0 ? (
-                <p className="text-slate-500 text-sm ml-6">
-                  Nenhum indicador cadastrado ainda.
-                </p>
-              ) : (
-                <div className="space-y-2 ml-6">
-                  {indicadores.map((indicador) => (
-                    <label key={indicador} className="flex items-center gap-3 text-sm text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={(permissoes[modulo] || []).includes(indicador)}
-                        readOnly
-                        className="accent-blue-600"
-                      />
-                      {indicador}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+            {indicadores.length === 0 ? (
+              <p className="text-slate-500 text-sm ml-6">
+                Nenhum indicador cadastrado ainda.
+              </p>
+            ) : (
+              <div className="space-y-2 ml-6">
+                {indicadores.map((indicador) => (
+                  <label key={indicador} className="flex items-center gap-3 text-sm text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={(permissoes[modulo] || []).includes(indicador)}
+                      onChange={() => alternarIndicador(modulo, indicador)}
+                      className="accent-blue-600"
+                    />
+                    {indicador}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
