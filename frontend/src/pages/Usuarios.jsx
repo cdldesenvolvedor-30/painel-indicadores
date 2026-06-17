@@ -253,33 +253,55 @@ function Usuarios() {
     }
   }
 
-  async function alterarFotoUsuario(event, id) {
-    try {
-      const file = event.target.files[0]
+  function redimensionarImagem(file, maxWidth = 500, qualidade = 0.7) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    const img = new Image()
 
-      if (!file) return
-
-      const reader = new FileReader()
-
-      reader.readAsDataURL(file)
-
-      reader.onloadend = async () => {
-        const base64 = reader.result
-
-        await api.patch(`/usuarios/${id}/foto`, {
-          foto_url: base64
-        })
-
-        toast.success('Foto atualizada com sucesso 📸')
-
-        carregarUsuarios()
-      }
-    } catch (error) {
-      console.error(error)
-
-      toast.error('Erro ao atualizar foto do usuário')
+    reader.onload = (event) => {
+      img.src = event.target.result
     }
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      const scale = maxWidth / img.width
+
+      canvas.width = maxWidth
+      canvas.height = img.height * scale
+
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+      const base64 = canvas.toDataURL('image/jpeg', qualidade)
+      resolve(base64)
+    }
+
+    img.onerror = reject
+    reader.onerror = reject
+
+    reader.readAsDataURL(file)
+  })
+}
+
+async function alterarFotoUsuario(event, id) {
+  const file = event.target.files[0]
+
+  if (!file) return
+
+  try {
+    const base64Comprimido = await redimensionarImagem(file, 500, 0.7)
+
+    await api.patch(`/usuarios/${id}/foto`, {
+      foto_url: base64Comprimido
+    })
+
+    toast.success('Foto atualizada com sucesso')
+    carregarUsuarios()
+  } catch (error) {
+    console.error(error)
+    toast.error('Erro ao atualizar foto')
   }
+}
 
   useEffect(() => {
     carregarUsuarios()
