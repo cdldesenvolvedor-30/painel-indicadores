@@ -17,6 +17,91 @@ function normalizarLista(dados) {
   return []
 }
 
+async function prepararTabelaColaboradores() {
+  await pool.query(`
+    ALTER TABLE colaboradores
+    ADD COLUMN IF NOT EXISTS digisac_user_id TEXT,
+    ADD COLUMN IF NOT EXISTS email TEXT,
+    ADD COLUMN IF NOT EXISTS departamento TEXT,
+    ADD COLUMN IF NOT EXISTS ultima_sincronizacao_digisac TIMESTAMP
+  `)
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS colaboradores_digisac_user_id_idx
+    ON colaboradores (digisac_user_id)
+    WHERE digisac_user_id IS NOT NULL
+  `)
+}
+
+async function sincronizarColaboradoresDigisac() {
+  try {
+    console.log('🔄 Sincronizando colaboradores da Digisac...')
+
+    await prepararTabelaColaboradores()
+
+    const response = await digisacApi.get('/users')
+    const usuarios = normalizarLista(response.data)
+
+    let criadosOuAtualizados = 0
+    let ignorados = 0
+
+    for (const usuario of usuarios) {
+      if (!usuario.id || !usuario.name || !usuario.email) {
+        ignorados++
+        continue
+      }
+
+      if (usuario.deletedAt || usuario.archivedAt || usuario.isClientUser) {
+        ignorados++
+        continue
+      }
+
+      await pool.query(
+        `
+        INSERT INTO colaboradores
+        (
+          digisac_user_id,
+          nome,
+          email,
+          setor,
+          cargo,
+          departamento,
+          status,
+          ultima_sincronizacao_digisac
+        )
+        VALUES
+        ($1, $2, $3, 'Atendimento', 'Atendente Digisac', $4, $5, NOW())
+        ON CONFLICT (digisac_user_id)
+        DO UPDATE SET
+          nome = EXCLUDED.nome,
+          email = EXCLUDED.email,
+          setor = 'Atendimento',
+          cargo = COALESCE(colaboradores.cargo, 'Atendente Digisac'),
+          departamento = EXCLUDED.departamento,
+          status = EXCLUDED.status,
+          ultima_sincronizacao_digisac = NOW()
+        `,
+        [
+          usuario.id,
+          usuario.name,
+          usuario.email,
+          usuario.branch || 'Digisac',
+          usuario.status === 'offline' ? 'Ativo' : 'Ativo'
+        ]
+      )
+
+      criadosOuAtualizados++
+    }
+
+    console.log(`✅ Colaboradores Digisac: ${criadosOuAtualizados} sincronizados | ${ignorados} ignorados`)
+  } catch (error) {
+    console.error(
+      '❌ Erro ao sincronizar colaboradores Digisac:',
+      error.response?.data || error.message
+    )
+  }
+}
+
 function extrairTelefone(contato) {
   return (
     contato.phone ||
@@ -86,15 +171,12 @@ async function sincronizarDigisacCRM() {
           observacao
         )
         VALUES
-        ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7)
+        ($1, $2, $3, 'Digisac', 'Contato via atendimento virtual', 'Sincronizado', CURRENT_DATE, $4)
         `,
         [
           nome,
           telefone,
           email,
-          'Digisac',
-          'Contato via atendimento virtual',
-          'Sincronizado',
           `Contato importado automaticamente da Digisac. ID origem: ${digisacId || 'não informado'}`
         ]
       )
@@ -111,6 +193,11 @@ async function sincronizarDigisacCRM() {
   }
 }
 
+async function executarSincronizacaoDigisac() {
+  await sincronizarDigisacCRM()
+  await sincronizarColaboradoresDigisac()
+}
+
 function iniciarSincronizacaoAutomatica() {
   if (!process.env.DIGISAC_API_URL || !process.env.DIGISAC_TOKEN) {
     console.log('⚠️ Integração Digisac não iniciada: variáveis ausentes.')
@@ -119,14 +206,15 @@ function iniciarSincronizacaoAutomatica() {
 
   console.log('🚀 Sincronização automática Digisac ativada a cada 5 minutos.')
 
-  sincronizarDigisacCRM()
+  executarSincronizacaoDigisac()
 
   setInterval(() => {
-    sincronizarDigisacCRM()
+    executarSincronizacaoDigisac()
   }, 5 * 60 * 1000)
 }
 
 module.exports = {
   sincronizarDigisacCRM,
+  sincronizarColaboradoresDigisac,
   iniciarSincronizacaoAutomatica
 }
