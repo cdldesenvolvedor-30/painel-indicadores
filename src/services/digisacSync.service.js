@@ -1,6 +1,6 @@
 const axios = require('axios')
 const pool = require('../database/connection')
-// sync digisac railway atualizado
+
 const digisacApi = axios.create({
   baseURL: process.env.DIGISAC_API_URL,
   headers: {
@@ -33,9 +33,7 @@ async function sincronizarDigisacCRM() {
     console.log('🔄 Sincronizando CRM com Digisac...')
 
     const response = await digisacApi.get('/contacts', {
-      params: {
-        limit: 100
-      }
+      params: { limit: 100 }
     })
 
     const contatos = normalizarLista(response.data)
@@ -44,6 +42,8 @@ async function sincronizarDigisacCRM() {
     let ignorados = 0
 
     for (const contato of contatos) {
+      const digisacId = contato.id || contato.uuid || null
+
       const nome =
         contato.name ||
         contato.fullName ||
@@ -57,36 +57,21 @@ async function sincronizarDigisacCRM() {
         contato.data?.email ||
         null
 
-     const existe = await pool.query(
-  'SELECT id FROM crm_atendimentos WHERE protocolo = $1',
-  [ticket.id]
-)
+      const existe = await pool.query(
+        `
+        SELECT id
+        FROM crm_atendimentos
+        WHERE observacao ILIKE $1
+        LIMIT 1
+        `,
+        [`%ID origem: ${digisacId}%`]
+      )
 
-if (existe.rows.length > 0) {
+      if (existe.rows.length > 0) {
+        ignorados++
+        continue
+      }
 
-  await pool.query(
-    `
-    UPDATE crm_atendimentos
-    SET
-      nome = $1,
-      telefone = $2,
-      unidade = $3,
-      motivo_contato = $4,
-      updated_at = NOW()
-    WHERE protocolo = $5
-    `,
-    [
-      ticket.contact?.name || 'Sem nome',
-      ticket.contact?.number || '',
-      ticket.department?.name || '',
-      ticket.subject || '',
-      ticket.id
-    ]
-  )
-
-  ignorados++
-  continue
-}
       await pool.query(
         `
         INSERT INTO crm_atendimentos
@@ -110,16 +95,19 @@ if (existe.rows.length > 0) {
           'Digisac',
           'Contato via atendimento virtual',
           'Sincronizado',
-          `Contato importado automaticamente da Digisac. ID origem: ${contato.id || 'não informado'}`
+          `Contato importado automaticamente da Digisac. ID origem: ${digisacId || 'não informado'}`
         ]
       )
 
       inseridos++
     }
 
-    console.log(`✅ Sincronização concluída: ${inseridos} novos | ${ignorados} ignorados`)
+    console.log(`✅ Digisac CRM: ${inseridos} novos | ${ignorados} ignorados`)
   } catch (error) {
-    console.error('❌ Erro na sincronização automática Digisac:', error.response?.data || error.message)
+    console.error(
+      '❌ Erro na sincronização automática Digisac:',
+      error.response?.data || error.message
+    )
   }
 }
 
