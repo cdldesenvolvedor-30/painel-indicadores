@@ -253,6 +253,12 @@ async function listarAssuntos(req, res) {
   }
 }
 
+async function debugUsuarios(req, res) {
+  const response = await digisacApi.get('/users')
+
+  return res.json(response.data)
+}
+
 module.exports = {
   testarConexao,
   listarContatos,
