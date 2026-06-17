@@ -104,6 +104,11 @@ function Usuarios() {
   const [editStatus, setEditStatus] = useState('Ativo')
   const [editPermissoes, setEditPermissoes] = useState(permissoesDoPerfil('usuario'))
 
+  const [modalSenhaAberto, setModalSenhaAberto] = useState(false)
+  const [usuarioSenha, setUsuarioSenha] = useState(null)
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmarSenha, setConfirmarSenha] = useState('')
+
   function alterarPerfilNovo(valor) {
     setPerfil(valor)
     setPermissoes(permissoesDoPerfil(valor))
@@ -200,32 +205,54 @@ function Usuarios() {
     }
   }
 
-  async function redefinirSenha(id) {
-  const novaSenha = prompt('Digite a nova senha do usuário:')
-
-  if (!novaSenha) return
-
-  if (novaSenha.length < 6) {
-    toast.error('A senha precisa ter pelo menos 6 caracteres')
-    return
+  function abrirModalSenha(usuario) {
+    setUsuarioSenha(usuario)
+    setNovaSenha('')
+    setConfirmarSenha('')
+    setModalSenhaAberto(true)
   }
 
-  try {
-    await api.patch(`/usuarios/${id}/redefinir-senha`, {
-      novaSenha
-    })
-
-    toast.success('Senha redefinida com sucesso')
-  } catch (error) {
-    console.error(error)
-
-    toast.error(
-      error.response?.data?.erro ||
-      'Erro ao redefinir senha'
-    )
+  function fecharModalSenha() {
+    setModalSenhaAberto(false)
+    setUsuarioSenha(null)
+    setNovaSenha('')
+    setConfirmarSenha('')
   }
-}
-  
+
+  async function confirmarRedefinicaoSenha() {
+    if (!novaSenha || !confirmarSenha) {
+      toast.error('Preencha os dois campos de senha')
+      return
+    }
+
+    if (novaSenha.length < 6) {
+      toast.error('A senha precisa ter pelo menos 6 caracteres')
+      return
+    }
+
+    if (novaSenha !== confirmarSenha) {
+      toast.error('As senhas não conferem')
+      return
+    }
+
+    try {
+      await api.patch(`/usuarios/${usuarioSenha.id}/redefinir-senha`, {
+        novaSenha
+      })
+
+      toast.success('Senha redefinida com sucesso')
+
+      fecharModalSenha()
+    } catch (error) {
+      console.error(error)
+
+      toast.error(
+        error.response?.data?.erro ||
+        'Erro ao redefinir senha'
+      )
+    }
+  }
+
   async function alterarFotoUsuario(event, id) {
     try {
       const file = event.target.files[0]
@@ -457,7 +484,7 @@ function Usuarios() {
                       </select>
 
                       <button
-                        onClick={() => redefinirSenha(usuario.id)}
+                        onClick={() => abrirModalSenha(usuario)}
                         className="flex items-center gap-2 bg-blue-500/15 text-blue-400 px-4 py-2 rounded-2xl font-bold hover:bg-blue-500/25 transition"
                       >
                         <Lock size={16} />
@@ -556,6 +583,102 @@ function Usuarios() {
           </div>
         )}
       </section>
+
+      {modalSenhaAberto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <div className="w-full max-w-xl bg-[#050b18] border border-blue-500/20 rounded-[32px] p-8 shadow-2xl shadow-blue-500/10">
+            <div className="flex items-start justify-between mb-8">
+              <div>
+                <p className="text-blue-400 font-bold mb-2">
+                  Segurança de acesso
+                </p>
+
+                <h2 className="text-3xl font-bold text-white">
+                  Redefinir senha
+                </h2>
+
+                <p className="text-slate-400 text-sm mt-3">
+                  Defina uma nova senha para <strong className="text-white">{usuarioSenha?.nome}</strong>.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={fecharModalSenha}
+                className="w-11 h-11 rounded-2xl bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-slate-400 mb-2 block">
+                  Nova senha
+                </label>
+
+                <div className="relative">
+                  <Lock
+                    size={18}
+                    className="absolute left-4 top-[18px] text-slate-400"
+                  />
+
+                  <input
+                    type="password"
+                    value={novaSenha}
+                    onChange={(e) => setNovaSenha(e.target.value)}
+                    placeholder="Digite a nova senha"
+                    className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-slate-400 mb-2 block">
+                  Confirmar senha
+                </label>
+
+                <div className="relative">
+                  <Lock
+                    size={18}
+                    className="absolute left-4 top-[18px] text-slate-400"
+                  />
+
+                  <input
+                    type="password"
+                    value={confirmarSenha}
+                    onChange={(e) => setConfirmarSenha(e.target.value)}
+                    placeholder="Confirme a nova senha"
+                    className="w-full bg-slate-950/70 soft-border rounded-2xl pl-11 pr-4 py-4 outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <p className="text-slate-500 text-xs">
+                A senha precisa ter no mínimo 6 caracteres e os dois campos precisam ser iguais.
+              </p>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 mt-8">
+              <button
+                type="button"
+                onClick={fecharModalSenha}
+                className="flex-1 bg-slate-800 text-slate-300 py-4 rounded-2xl font-bold hover:bg-slate-700 transition"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmarRedefinicaoSenha}
+                className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-500 transition shadow-lg shadow-blue-500/25"
+              >
+                Salvar nova senha
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
