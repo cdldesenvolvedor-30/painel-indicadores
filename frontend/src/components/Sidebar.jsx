@@ -37,40 +37,38 @@ function Sidebar() {
   }
 
   const menus = {
-    Digisac: {
-      icon: Database,
-      itens: [
-        { to: '/indicadores', texto: 'Indicadores', icon: BarChart3 },
-        { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map },
-        { to: '/ranking', texto: 'Classificação', icon: Trophy },
-        { to: '/alertas', texto: 'Alertas', icon: Bell }
-      ]
-    },
+  Digisac: {
+    icon: Database,
+    itens: [
+      { to: '/indicadores', texto: 'Indicadores', icon: BarChart3 },
+      { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map },
+      { to: '/ranking', texto: 'Classificação', icon: Trophy },
+      { to: '/alertas', texto: 'Alertas', icon: Bell },
+      { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore },
+      { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target },
+      { to: '/metas', texto: 'Metas/KPIs', icon: Target }
+    ]
+  },
 
-    Shift: {
-      icon: Building2,
-      itens: [
-        { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore },
-        { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target },
-        { to: '/metas', texto: 'Metas/KPIs', icon: Target }
-      ]
-    },
+  Shift: {
+    icon: Building2,
+    itens: []
+  },
 
-    Gestão: {
-      icon: Settings,
-      itens: [
-        { to: '/colaboradores', texto: 'Colaboradores', icon: Users },
-        { to: '/integracoes', texto: 'Integrações', icon: PlugZap },
-        ...(usuario?.perfil === 'admin'
-          ? [
-              { to: '/usuarios', texto: 'Usuários', icon: UserCog },
-              { to: '/logs', texto: 'Auditoria', icon: FileClock }
-            ]
-          : [])
-      ]
-    }
+  Gestão: {
+    icon: Settings,
+    itens: [
+      { to: '/colaboradores', texto: 'Colaboradores', icon: Users },
+      { to: '/integracoes', texto: 'Integrações', icon: PlugZap },
+      ...(usuario?.perfil === 'admin'
+        ? [
+            { to: '/usuarios', texto: 'Usuários', icon: UserCog },
+            { to: '/logs', texto: 'Auditoria', icon: FileClock }
+          ]
+        : [])
+    ]
   }
-
+}
   return (
     <aside className="w-72 min-h-screen bg-[#050b18] border-r border-blue-500/10 p-5 flex flex-col justify-between">
       <div>
@@ -85,14 +83,26 @@ function Sidebar() {
           </div>
         </div>
 
-        {!menuAtual ? (
-          <nav className="space-y-3">
-            <Item
-              to="/dashboard"
-              ativo={location.pathname === '/dashboard'}
-              icon={LayoutDashboard}
-              texto="Início"
-            />
+        {menus[menuAtual].itens.length === 0 && (
+  <div className="mt-8 bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center">
+    <p className="text-slate-300 font-semibold">
+      Nenhum indicador cadastrado
+    </p>
+    <p className="text-slate-500 text-sm mt-2">
+      Os indicadores deste módulo serão adicionados futuramente.
+    </p>
+  </div>
+)}
+
+{menus[menuAtual].itens.map((item) => (
+  <Item
+    key={item.to}
+    to={item.to}
+    ativo={location.pathname === item.to}
+    icon={item.icon}
+    texto={item.texto}
+  />
+))}
 
             {Object.entries(menus).map(([nome, menu]) => (
               <BotaoMenu
