@@ -10,7 +10,8 @@ const {
     criarUsuario,
     atualizarUsuario,
     desativarUsuario,
-    atualizarFotoUsuario
+    atualizarFotoUsuario,
+    redefinirSenhaUsuario
 } = require('../controllers/usuarios.controller')
 
 router.use(authMiddleware)
@@ -43,6 +44,12 @@ router.patch(
     '/:id/foto',
     perfilMiddleware(['admin']),
     atualizarFotoUsuario
+)
+
+router.patch(
+  '/:id/redefinir-senha',
+  perfilMiddleware(['admin']),
+  redefinirSenhaUsuario
 )
 
 module.exports = router
