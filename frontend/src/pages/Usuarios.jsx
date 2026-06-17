@@ -200,6 +200,32 @@ function Usuarios() {
     }
   }
 
+  async function redefinirSenha(id) {
+  const novaSenha = prompt('Digite a nova senha do usuário:')
+
+  if (!novaSenha) return
+
+  if (novaSenha.length < 6) {
+    toast.error('A senha precisa ter pelo menos 6 caracteres')
+    return
+  }
+
+  try {
+    await api.patch(`/usuarios/${id}/redefinir-senha`, {
+      novaSenha
+    })
+
+    toast.success('Senha redefinida com sucesso')
+  } catch (error) {
+    console.error(error)
+
+    toast.error(
+      error.response?.data?.erro ||
+      'Erro ao redefinir senha'
+    )
+  }
+}
+  
   async function alterarFotoUsuario(event, id) {
     try {
       const file = event.target.files[0]
@@ -430,6 +456,14 @@ function Usuarios() {
                         <option value="Inativo">Inativo</option>
                       </select>
 
+                      <button
+                        onClick={() => redefinirSenha(usuario.id)}
+                        className="flex items-center gap-2 bg-blue-500/15 text-blue-400 px-4 py-2 rounded-2xl font-bold hover:bg-blue-500/25 transition"
+                      >
+                        <Lock size={16} />
+                        Redefinir senha
+                      </button>
+                      
                       <button
                         onClick={() => salvarEdicao(usuario.id)}
                         className="bg-green-600 hover:bg-green-700 transition p-3 rounded-2xl font-bold flex items-center justify-center gap-2"
