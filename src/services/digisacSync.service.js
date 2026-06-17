@@ -40,14 +40,15 @@ async function sincronizarColaboradoresDigisac() {
     await prepararTabelaColaboradores()
 
 let usuarios = []
-let page = 1
+let offset = 0
+const limit = 100
 let continuar = true
 
 while (continuar) {
   const response = await digisacApi.get('/users', {
     params: {
-      page,
-      limit: 100
+      limit,
+      offset
     }
   })
 
@@ -55,10 +56,10 @@ while (continuar) {
 
   usuarios = [...usuarios, ...lista]
 
-  if (lista.length < 100) {
+  if (lista.length < limit) {
     continuar = false
   } else {
-    page++
+    offset += limit
   }
 }
 
