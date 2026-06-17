@@ -102,7 +102,7 @@ while (continuar) {
             setor = 'Atendimento',
             cargo = COALESCE(cargo, 'Atendente Digisac'),
             departamento = $4,
-            status = 'Ativo',
+            status = colaboradores.status,
             ultima_sincronizacao_digisac = NOW()
           WHERE id = $5
           `,
