@@ -42,7 +42,9 @@ async function sincronizarColaboradoresDigisac() {
     const response = await digisacApi.get('/users')
     const usuarios = normalizarLista(response.data)
 
-    let criadosOuAtualizados = 0
+    let sincronizados = 0
+    let criados = 0
+    let atualizados = 0
     let ignorados = 0
 
     for (const usuario of usuarios) {
@@ -56,44 +58,75 @@ async function sincronizarColaboradoresDigisac() {
         continue
       }
 
-      await pool.query(
+      const existente = await pool.query(
         `
-        INSERT INTO colaboradores
-        (
-          digisac_user_id,
-          nome,
-          email,
-          setor,
-          cargo,
-          departamento,
-          status,
-          ultima_sincronizacao_digisac
-        )
-        VALUES
-        ($1, $2, $3, 'Atendimento', 'Atendente Digisac', $4, $5, NOW())
-        ON CONFLICT (digisac_user_id)
-        DO UPDATE SET
-          nome = EXCLUDED.nome,
-          email = EXCLUDED.email,
-          setor = 'Atendimento',
-          cargo = COALESCE(colaboradores.cargo, 'Atendente Digisac'),
-          departamento = EXCLUDED.departamento,
-          status = EXCLUDED.status,
-          ultima_sincronizacao_digisac = NOW()
+        SELECT id
+        FROM colaboradores
+        WHERE digisac_user_id = $1 OR email = $2
+        LIMIT 1
         `,
-        [
-          usuario.id,
-          usuario.name,
-          usuario.email,
-          usuario.branch || 'Digisac',
-          usuario.status === 'offline' ? 'Ativo' : 'Ativo'
-        ]
+        [usuario.id, usuario.email]
       )
 
-      criadosOuAtualizados++
+      if (existente.rows.length > 0) {
+        await pool.query(
+          `
+          UPDATE colaboradores
+          SET
+            digisac_user_id = $1,
+            nome = $2,
+            email = $3,
+            setor = 'Atendimento',
+            cargo = COALESCE(cargo, 'Atendente Digisac'),
+            departamento = $4,
+            status = 'Ativo',
+            ultima_sincronizacao_digisac = NOW()
+          WHERE id = $5
+          `,
+          [
+            usuario.id,
+            usuario.name,
+            usuario.email,
+            usuario.branch || 'Digisac',
+            existente.rows[0].id
+          ]
+        )
+
+        atualizados++
+      } else {
+        await pool.query(
+          `
+          INSERT INTO colaboradores
+          (
+            digisac_user_id,
+            nome,
+            email,
+            setor,
+            cargo,
+            departamento,
+            status,
+            ultima_sincronizacao_digisac
+          )
+          VALUES
+          ($1, $2, $3, 'Atendimento', 'Atendente Digisac', $4, 'Ativo', NOW())
+          `,
+          [
+            usuario.id,
+            usuario.name,
+            usuario.email,
+            usuario.branch || 'Digisac'
+          ]
+        )
+
+        criados++
+      }
+
+      sincronizados++
     }
 
-    console.log(`✅ Colaboradores Digisac: ${criadosOuAtualizados} sincronizados | ${ignorados} ignorados`)
+    console.log(
+      `✅ Colaboradores Digisac: ${sincronizados} sincronizados | ${criados} criados | ${atualizados} atualizados | ${ignorados} ignorados`
+    )
   } catch (error) {
     console.error(
       '❌ Erro ao sincronizar colaboradores Digisac:',
