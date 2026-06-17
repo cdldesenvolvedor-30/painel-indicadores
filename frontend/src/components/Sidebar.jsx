@@ -3,8 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import {
   Activity,
-  ChevronDown,
-  ChevronRight,
+  ArrowLeft,
   LayoutDashboard,
   BarChart3,
   Target,
@@ -19,7 +18,8 @@ import {
   PlugZap,
   Building2,
   Database,
-  Settings
+  Settings,
+  ChevronRight
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
@@ -29,15 +29,46 @@ function Sidebar() {
   const navigate = useNavigate()
   const { usuario, logout } = useAuth()
 
-  const [aberto, setAberto] = useState('Gestão')
+  const [menuAtual, setMenuAtual] = useState(null)
 
   function sair() {
     logout()
     navigate('/login')
   }
 
-  function alternarGrupo(nome) {
-    setAberto(aberto === nome ? '' : nome)
+  const menus = {
+    Digisac: {
+      icon: Database,
+      itens: [
+        { to: '/indicadores', texto: 'Indicadores', icon: BarChart3 },
+        { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map },
+        { to: '/ranking', texto: 'Classificação', icon: Trophy },
+        { to: '/alertas', texto: 'Alertas', icon: Bell }
+      ]
+    },
+
+    Shift: {
+      icon: Building2,
+      itens: [
+        { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore },
+        { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target },
+        { to: '/metas', texto: 'Metas/KPIs', icon: Target }
+      ]
+    },
+
+    Gestão: {
+      icon: Settings,
+      itens: [
+        { to: '/colaboradores', texto: 'Colaboradores', icon: Users },
+        { to: '/integracoes', texto: 'Integrações', icon: PlugZap },
+        ...(usuario?.perfil === 'admin'
+          ? [
+              { to: '/usuarios', texto: 'Usuários', icon: UserCog },
+              { to: '/logs', texto: 'Auditoria', icon: FileClock }
+            ]
+          : [])
+      ]
+    }
   }
 
   return (
@@ -54,54 +85,55 @@ function Sidebar() {
           </div>
         </div>
 
-        <nav className="space-y-4">
-          <Item
-            to="/dashboard"
-            ativo={location.pathname === '/dashboard'}
-            icon={LayoutDashboard}
-            texto="Início"
-          />
+        {!menuAtual ? (
+          <nav className="space-y-3">
+            <Item
+              to="/dashboard"
+              ativo={location.pathname === '/dashboard'}
+              icon={LayoutDashboard}
+              texto="Início"
+            />
 
-          <GrupoMenu
-            titulo="Digestar"
-            icon={Database}
-            aberto={aberto === 'Digestar'}
-            onClick={() => alternarGrupo('Digestar')}
-          >
-            <Item to="/indicadores" ativo={location.pathname === '/indicadores'} icon={BarChart3} texto="Indicadores" />
-            <Item to="/mapa-performance" ativo={location.pathname === '/mapa-performance'} icon={Map} texto="Mapa de Performance" />
-            <Item to="/ranking" ativo={location.pathname === '/ranking'} icon={Trophy} texto="Classificação" />
-            <Item to="/alertas" ativo={location.pathname === '/alertas'} icon={Bell} texto="Alertas" />
-          </GrupoMenu>
+            {Object.entries(menus).map(([nome, menu]) => (
+              <BotaoMenu
+                key={nome}
+                texto={nome}
+                icon={menu.icon}
+                onClick={() => setMenuAtual(nome)}
+              />
+            ))}
+          </nav>
+        ) : (
+          <nav className="space-y-3">
+            <button
+              onClick={() => setMenuAtual(null)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 transition mb-5"
+            >
+              <ArrowLeft size={18} />
+              <span className="font-medium">Voltar</span>
+            </button>
 
-          <GrupoMenu
-            titulo="Shift"
-            icon={Building2}
-            aberto={aberto === 'Shift'}
-            onClick={() => alternarGrupo('Shift')}
-          >
-            <Item to="/crm" ativo={location.pathname === '/crm'} icon={MessageSquareMore} texto="CRM Atendimento" />
-            <Item to="/comparativo-metas" ativo={location.pathname === '/comparativo-metas'} icon={Target} texto="Meta x Resultado" />
-            <Item to="/metas" ativo={location.pathname === '/metas'} icon={Target} texto="Metas/KPIs" />
-          </GrupoMenu>
+            <div className="mb-5">
+              <p className="text-xs text-slate-500 uppercase font-bold mb-1">
+                Indicadores
+              </p>
 
-          <GrupoMenu
-            titulo="Gestão"
-            icon={Settings}
-            aberto={aberto === 'Gestão'}
-            onClick={() => alternarGrupo('Gestão')}
-          >
-            <Item to="/colaboradores" ativo={location.pathname === '/colaboradores'} icon={Users} texto="Colaboradores" />
-            <Item to="/integracoes" ativo={location.pathname === '/integracoes'} icon={PlugZap} texto="Integrações" />
+              <h2 className="text-xl font-bold text-white">
+                {menuAtual}
+              </h2>
+            </div>
 
-            {usuario?.perfil === 'admin' && (
-              <>
-                <Item to="/usuarios" ativo={location.pathname === '/usuarios'} icon={UserCog} texto="Usuários" />
-                <Item to="/logs" ativo={location.pathname === '/logs'} icon={FileClock} texto="Auditoria" />
-              </>
-            )}
-          </GrupoMenu>
-        </nav>
+            {menus[menuAtual].itens.map((item) => (
+              <Item
+                key={item.to}
+                to={item.to}
+                ativo={location.pathname === item.to}
+                icon={item.icon}
+                texto={item.texto}
+              />
+            ))}
+          </nav>
+        )}
       </div>
 
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
@@ -136,27 +168,19 @@ function Sidebar() {
   )
 }
 
-function GrupoMenu({ titulo, icon: Icon, aberto, onClick, children }) {
+function BotaoMenu({ texto, icon: Icon, onClick }) {
   return (
-    <div>
-      <button
-        onClick={onClick}
-        className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-200 hover:bg-slate-800 transition"
-      >
-        <div className="flex items-center gap-3">
-          <Icon size={19} />
-          <span className="font-semibold">{titulo}</span>
-        </div>
+    <button
+      onClick={onClick}
+      className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-slate-200 hover:bg-slate-800 transition"
+    >
+      <div className="flex items-center gap-3">
+        <Icon size={19} />
+        <span className="font-semibold">{texto}</span>
+      </div>
 
-        {aberto ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-      </button>
-
-      {aberto && (
-        <div className="mt-2 ml-3 pl-3 border-l border-blue-500/20 space-y-2">
-          {children}
-        </div>
-      )}
-    </div>
+      <ChevronRight size={18} />
+    </button>
   )
 }
 
