@@ -52,6 +52,8 @@ while (continuar) {
     }
   })
 
+  console.log('DEBUG USERS DIGISAC:', JSON.stringify(response.data).slice(0, 2000))
+  
   const lista = normalizarLista(response.data)
 
   usuarios = [...usuarios, ...lista]
