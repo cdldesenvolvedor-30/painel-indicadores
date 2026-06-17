@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import toast from 'react-hot-toast'
 
@@ -567,6 +567,7 @@ function Info({ titulo, valor, verde }) {
 
 function CampoData({ label, value, onChange }) {
   const [aberto, setAberto] = useState(false)
+  const campoRef = useRef(null)
   const [digitado, setDigitado] = useState(value || '')
   const [dataBase, setDataBase] = useState(value ? new Date(value) : new Date())
 
@@ -575,6 +576,20 @@ function CampoData({ label, value, onChange }) {
 
   const primeiroDia = new Date(ano, mes, 1).getDay()
   const totalDias = new Date(ano, mes + 1, 0).getDate()
+
+  useEffect(() => {
+    function fecharAoClicarFora(event) {
+      if (campoRef.current && !campoRef.current.contains(event.target)) {
+        setAberto(false)
+      }
+    }
+
+    document.addEventListener('mousedown', fecharAoClicarFora)
+
+    return () => {
+      document.removeEventListener('mousedown', fecharAoClicarFora)
+    }
+  }, [])
 
   const dias = []
 
@@ -600,7 +615,7 @@ function CampoData({ label, value, onChange }) {
     } 
 
   return (
-    <div className="relative">
+    <div ref={campoRef} className="relative">
       <div className="relative">
         <CalendarDays size={18} className="absolute left-4 top-[18px] text-slate-400" />
 
@@ -685,6 +700,7 @@ function CampoData({ label, value, onChange }) {
 
 function CampoFiltro({ icon: Icon, placeholder, value, onChange, opcoes = [] }) {
   const [aberto, setAberto] = useState(false)
+  const campoRef = useRef(null)
   const [buscaInterna, setBuscaInterna] = useState('')
 
   const lista = opcoes
@@ -702,8 +718,23 @@ function CampoFiltro({ icon: Icon, placeholder, value, onChange, opcoes = [] }) 
     (item) => String(item.value) === String(value)
   )
 
+  useEffect(() => {
+    function fecharAoClicarFora(event) {
+      if (campoRef.current && !campoRef.current.contains(event.target)) {
+        setAberto(false)
+        setBuscaInterna('')
+      }
+    }
+
+    document.addEventListener('mousedown', fecharAoClicarFora)
+
+    return () => {
+      document.removeEventListener('mousedown', fecharAoClicarFora)
+    }
+  }, [])
+
   return (
-    <div className="relative">
+    <div ref={campoRef} className="relative">
       <div className="relative">
         <Icon
           size={18}
