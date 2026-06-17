@@ -28,6 +28,6 @@ router.get('/tickets', listarTickets)
 router.post('/sincronizar-crm', sincronizarCRM)
 router.get('/departamentos', listarDepartamentos)
 router.get('/filas', listarFilas)
-router.get('/debug-users', debugUsuarios)
+router.get('/debug-users', listarUsuarios)
 
 module.exports = router
