@@ -20,6 +20,59 @@ import api from '../services/api'
 import Topbar from '../components/Topbar'
 import SkeletonCard from '../components/SkeletonCard'
 
+const PERFIS = [
+  { value: 'usuario', label: 'Usuário' },
+  { value: 'gestao', label: 'Gestão' },
+  { value: 'supervisao', label: 'Supervisão' },
+  { value: 'gerencia', label: 'Gerência' },
+  { value: 'diretoria', label: 'Diretoria' },
+  { value: 'admin', label: 'Administrador' }
+]
+
+const PERMISSOES_POR_PERFIL = {
+  admin: {
+    Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
+    Shift: [],
+    Gestão: ['Colaboradores', 'Integrações', 'Usuários', 'Auditoria']
+  },
+
+  diretoria: {
+    Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
+    Shift: [],
+    Gestão: []
+  },
+
+  gerencia: {
+    Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
+    Shift: [],
+    Gestão: []
+  },
+
+  gestao: {
+    Digisac: [],
+    Shift: [],
+    Gestão: []
+  },
+
+  supervisao: {
+    Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas'],
+    Shift: [],
+    Gestão: []
+  },
+
+  usuario: {
+    Digisac: ['Indicadores'],
+    Shift: [],
+    Gestão: []
+  }
+}
+
+const TODOS_INDICADORES = {
+  Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
+  Shift: [],
+  Gestão: ['Colaboradores', 'Integrações', 'Usuários', 'Auditoria']
+}
+
 function Usuarios() {
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
@@ -152,14 +205,9 @@ function Usuarios() {
   }, [])
 
   const admins = usuarios.filter((item) => item.perfil === 'admin').length
-
-  const diretoria = usuarios.filter(
-    (item) => item.perfil === 'diretoria'
-  ).length
-
-  const gestores = usuarios.filter(
-    (item) => item.perfil === 'gestor'
-  ).length
+  const diretoria = usuarios.filter((item) => item.perfil === 'diretoria').length
+  const gerencia = usuarios.filter((item) => item.perfil === 'gerencia').length
+  const gestao = usuarios.filter((item) => item.perfil === 'gestao').length
 
   return (
     <main className="flex-1 p-8 overflow-auto">
@@ -177,7 +225,7 @@ function Usuarios() {
             </h2>
 
             <p className="text-slate-400 mt-4 max-w-2xl">
-              Cadastre usuários, vincule setores e prepare permissões futuras por perfil.
+              Cadastre usuários, vincule setores e defina o perfil de acesso ao Painel BI.
             </p>
           </div>
 
@@ -185,7 +233,7 @@ function Usuarios() {
             <MiniCard titulo="Usuários" valor={usuarios.length} />
             <MiniCard titulo="Admins" valor={admins} vermelho />
             <MiniCard titulo="Diretoria" valor={diretoria} azul />
-            <MiniCard titulo="Gestores" valor={gestores} verde />
+            <MiniCard titulo="Gerência" valor={gerencia} verde />
           </div>
         </div>
       </section>
@@ -251,12 +299,16 @@ function Usuarios() {
             value={perfil}
             onChange={setPerfil}
           >
-            <option value="usuario">Usuário</option>
-            <option value="gestor">Gestor</option>
-            <option value="supervisor">Supervisor</option>
-            <option value="diretoria">Diretoria</option>
-            <option value="admin">Administrador</option>
+            {PERFIS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
           </CampoSelect>
+
+          <div className="xl:col-span-5">
+            <PermissoesPreview perfil={perfil} />
+          </div>
 
           <button
             type="submit"
@@ -305,54 +357,58 @@ function Usuarios() {
                 className="bg-slate-950/60 soft-border rounded-[28px] p-5 hover:bg-blue-950/20 transition"
               >
                 {editandoId === usuario.id ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-                    <input
-                      value={editNome}
-                      onChange={(e) => setEditNome(e.target.value)}
-                      className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
-                    />
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
+                      <input
+                        value={editNome}
+                        onChange={(e) => setEditNome(e.target.value)}
+                        className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
+                      />
 
-                    <input
-                      value={editEmail}
-                      onChange={(e) => setEditEmail(e.target.value)}
-                      className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
-                    />
+                      <input
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
+                      />
 
-                    <input
-                      value={editSetor}
-                      onChange={(e) => setEditSetor(e.target.value)}
-                      placeholder="Setor"
-                      className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
-                    />
+                      <input
+                        value={editSetor}
+                        onChange={(e) => setEditSetor(e.target.value)}
+                        placeholder="Setor"
+                        className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
+                      />
 
-                    <select
-                      value={editPerfil}
-                      onChange={(e) => setEditPerfil(e.target.value)}
-                      className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
-                    >
-                      <option value="usuario">Usuário</option>
-                      <option value="gestor">Gestor</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="diretoria">Diretoria</option>
-                      <option value="admin">Administrador</option>
-                    </select>
+                      <select
+                        value={editPerfil}
+                        onChange={(e) => setEditPerfil(e.target.value)}
+                        className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
+                      >
+                        {PERFIS.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
 
-                    <select
-                      value={editStatus}
-                      onChange={(e) => setEditStatus(e.target.value)}
-                      className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
-                    >
-                      <option value="Ativo">Ativo</option>
-                      <option value="Inativo">Inativo</option>
-                    </select>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value)}
+                        className="bg-slate-950/70 soft-border rounded-2xl px-4 py-3 outline-none"
+                      >
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                      </select>
 
-                    <button
-                      onClick={() => salvarEdicao(usuario.id)}
-                      className="bg-green-600 hover:bg-green-700 transition p-3 rounded-2xl font-bold flex items-center justify-center gap-2"
-                    >
-                      <Save size={16} />
-                      Salvar
-                    </button>
+                      <button
+                        onClick={() => salvarEdicao(usuario.id)}
+                        className="bg-green-600 hover:bg-green-700 transition p-3 rounded-2xl font-bold flex items-center justify-center gap-2"
+                      >
+                        <Save size={16} />
+                        Salvar
+                      </button>
+                    </div>
+
+                    <PermissoesPreview perfil={editPerfil} />
                   </div>
                 ) : (
                   <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-6">
@@ -436,6 +492,66 @@ function Usuarios() {
   )
 }
 
+function PermissoesPreview({ perfil }) {
+  const permissoes = PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.usuario
+
+  return (
+    <div className="bg-slate-950/50 soft-border rounded-[24px] p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="font-bold text-white">
+            Permissões automáticas do perfil
+          </p>
+
+          <p className="text-slate-500 text-xs mt-1">
+            Nesta fase, as permissões são aplicadas conforme o perfil selecionado.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {Object.entries(TODOS_INDICADORES).map(([modulo, indicadores]) => {
+          const moduloAtivo = (permissoes[modulo] || []).length > 0 || (modulo === 'Shift' && perfil === 'gestao')
+
+          return (
+            <div key={modulo} className="bg-slate-900/60 rounded-2xl p-4 border border-slate-800">
+              <label className="flex items-center gap-3 font-bold mb-3">
+                <input
+                  type="checkbox"
+                  checked={moduloAtivo}
+                  readOnly
+                  className="accent-blue-600"
+                />
+                {modulo}
+              </label>
+
+              {indicadores.length === 0 ? (
+                <p className="text-slate-500 text-sm ml-6">
+                  Nenhum indicador cadastrado ainda.
+                </p>
+              ) : (
+                <div className="space-y-2 ml-6">
+                  {indicadores.map((indicador) => (
+                    <label key={indicador} className="flex items-center gap-3 text-sm text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={(permissoes[modulo] || []).includes(indicador)}
+                        readOnly
+                        className="accent-blue-600"
+                      />
+                      {indicador}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function MiniCard({ titulo, valor, verde, vermelho }) {
   return (
     <div className="bg-slate-950/60 soft-border rounded-3xl p-5">
@@ -499,9 +615,19 @@ function Badge({ perfil }) {
   const estilos = {
     admin: 'bg-red-500/15 text-red-400',
     diretoria: 'bg-blue-500/15 text-blue-400',
-    gestor: 'bg-green-500/15 text-green-400',
-    supervisor: 'bg-yellow-500/15 text-yellow-400',
+    gerencia: 'bg-cyan-500/15 text-cyan-400',
+    gestao: 'bg-green-500/15 text-green-400',
+    supervisao: 'bg-yellow-500/15 text-yellow-400',
     usuario: 'bg-slate-500/15 text-slate-300'
+  }
+
+  const labels = {
+    admin: 'Administrador',
+    diretoria: 'Diretoria',
+    gerencia: 'Gerência',
+    gestao: 'Gestão',
+    supervisao: 'Supervisão',
+    usuario: 'Usuário'
   }
 
   return (
@@ -509,7 +635,7 @@ function Badge({ perfil }) {
       className={`px-4 py-2 rounded-full text-sm font-bold ${estilos[perfil] || estilos.usuario}`}
     >
       <BadgeCheck size={15} className="inline mr-2" />
-      {perfil}
+      {labels[perfil] || perfil}
     </span>
   )
 }
