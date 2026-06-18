@@ -25,12 +25,34 @@ async function prepararTabelaColaboradores() {
     ADD COLUMN IF NOT EXISTS departamento TEXT,
     ADD COLUMN IF NOT EXISTS ultima_sincronizacao_digisac TIMESTAMP
   `)
+}
 
+async function prepararTabelaCRM() {
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS colaboradores_digisac_user_id_idx
-    ON colaboradores (digisac_user_id)
-    WHERE digisac_user_id IS NOT NULL
+    ALTER TABLE crm_atendimentos
+    ADD COLUMN IF NOT EXISTS digisac_ticket_id TEXT,
+    ADD COLUMN IF NOT EXISTS protocolo TEXT,
+    ADD COLUMN IF NOT EXISTS digisac_user_id TEXT,
+    ADD COLUMN IF NOT EXISTS digisac_department_id TEXT,
+    ADD COLUMN IF NOT EXISTS ultima_sincronizacao_digisac TIMESTAMP
   `)
+}
+
+async function buscarColaboradorPorDigisacId(digisacUserId) {
+  if (!digisacUserId) return null
+
+  const result = await pool.query(
+    `
+    SELECT id
+    FROM colaboradores
+    WHERE digisac_user_id = $1
+      AND status = 'Ativo'
+    LIMIT 1
+    `,
+    [digisacUserId]
+  )
+
+  return result.rows[0]?.id || null
 }
 
 async function sincronizarColaboradoresDigisac() {
@@ -39,31 +61,29 @@ async function sincronizarColaboradoresDigisac() {
 
     await prepararTabelaColaboradores()
 
-let usuarios = []
-let page = 1
-const perPage = 100
-let continuar = true
+    let usuarios = []
+    let page = 1
+    const perPage = 100
+    let continuar = true
 
-while (continuar) {
-  const response = await digisacApi.get('/users', {
-    params: {
-      page,
-      perPage
+    while (continuar) {
+      const response = await digisacApi.get('/users', {
+        params: {
+          page,
+          perPage
+        }
+      })
+
+      const lista = normalizarLista(response.data)
+
+      usuarios = [...usuarios, ...lista]
+
+      if (lista.length < perPage) {
+        continuar = false
+      } else {
+        page++
+      }
     }
-  })
-
-  const lista = normalizarLista(response.data)
-
-  usuarios = [...usuarios, ...lista]
-
-  console.log(`DEBUG PAGINA USERS: page=${page} total=${lista.length}`)
-
-  if (lista.length < perPage) {
-    continuar = false
-  } else {
-    page++
-  }
-}
 
     let sincronizados = 0
     let criados = 0
@@ -158,100 +178,176 @@ while (continuar) {
   }
 }
 
-function extrairTelefone(contato) {
-  return (
-    contato.phone ||
-    contato.number ||
-    contato.whatsapp ||
-    contato.mobilePhone ||
-    contato.data?.phone ||
-    'Não informado'
-  )
-}
-
 async function sincronizarDigisacCRM() {
   try {
-    console.log('🔄 Sincronizando CRM com Digisac...')
+    console.log('🔄 Sincronizando tickets CRM da Digisac...')
 
-    const response = await digisacApi.get('/contacts', {
-      params: { limit: 100 }
-    })
+    await prepararTabelaCRM()
 
-    const contatos = normalizarLista(response.data)
+    let tickets = []
+    let skip = 0
+    const limit = 100
+    const maxTickets = Number(process.env.DIGISAC_TICKETS_LIMIT || 500)
+    let continuar = true
+
+    while (continuar && tickets.length < maxTickets) {
+      const response = await digisacApi.get('/tickets', {
+        params: {
+          limit,
+          skip
+        }
+      })
+
+      const lista = normalizarLista(response.data)
+
+      tickets = [...tickets, ...lista]
+
+      if (lista.length < limit) {
+        continuar = false
+      } else {
+        skip += limit
+      }
+    }
 
     let inseridos = 0
+    let atualizados = 0
     let ignorados = 0
 
-    for (const contato of contatos) {
-      const digisacId = contato.id || contato.uuid || null
-
-      const nome =
-        contato.name ||
-        contato.fullName ||
-        contato.data?.name ||
-        'Contato sem nome'
-
-      const telefone = extrairTelefone(contato)
-
-      const email =
-        contato.email ||
-        contato.data?.email ||
-        null
-
-      const existe = await pool.query(
-        `
-        SELECT id
-        FROM crm_atendimentos
-        WHERE observacao ILIKE $1
-        LIMIT 1
-        `,
-        [`%ID origem: ${digisacId}%`]
-      )
-
-      if (existe.rows.length > 0) {
+    for (const ticket of tickets) {
+      if (!ticket.id || !ticket.protocol) {
         ignorados++
         continue
       }
 
-      await pool.query(
-        `
-        INSERT INTO crm_atendimentos
-        (
-          paciente_nome,
-          paciente_telefone,
-          paciente_email,
-          canal,
-          motivo_contato,
-          status_atendimento,
-          data_atendimento,
-          observacao
-        )
-        VALUES
-        ($1, $2, $3, 'Digisac', 'Contato via atendimento virtual', 'Sincronizado', CURRENT_DATE, $4)
-        `,
-        [
-          nome,
-          telefone,
-          email,
-          `Contato importado automaticamente da Digisac. ID origem: ${digisacId || 'não informado'}`
-        ]
+      const colaboradorId = await buscarColaboradorPorDigisacId(ticket.userId)
+
+      const dataAtendimento = ticket.startedAt
+        ? ticket.startedAt.substring(0, 10)
+        : new Date().toISOString().substring(0, 10)
+
+      const tempoEspera = Number(ticket.metrics?.waitingTime || 0)
+      const tempoAtendimento = Number(
+        ticket.metrics?.messagingTime ||
+        ticket.metrics?.ticketTime ||
+        0
       )
 
-      inseridos++
+      const statusAtendimento = ticket.isOpen ? 'Aberto' : 'Finalizado'
+
+      const existente = await pool.query(
+        `
+        SELECT id
+        FROM crm_atendimentos
+        WHERE digisac_ticket_id = $1 OR protocolo = $2
+        LIMIT 1
+        `,
+        [ticket.id, ticket.protocol]
+      )
+
+      if (existente.rows.length > 0) {
+        await pool.query(
+          `
+          UPDATE crm_atendimentos
+          SET
+            colaborador_id = $1,
+            status_atendimento = $2,
+            tempo_espera_segundos = $3,
+            tempo_atendimento_segundos = $4,
+            data_atendimento = $5,
+            digisac_user_id = $6,
+            digisac_department_id = $7,
+            ultima_sincronizacao_digisac = NOW()
+          WHERE id = $8
+          `,
+          [
+            colaboradorId,
+            statusAtendimento,
+            tempoEspera,
+            tempoAtendimento,
+            dataAtendimento,
+            ticket.userId || null,
+            ticket.departmentId || null,
+            existente.rows[0].id
+          ]
+        )
+
+        atualizados++
+      } else {
+        await pool.query(
+          `
+          INSERT INTO crm_atendimentos
+          (
+            paciente_nome,
+            paciente_telefone,
+            paciente_email,
+            unidade,
+            colaborador_id,
+            canal,
+            motivo_contato,
+            exame_interesse,
+            status_atendimento,
+            tempo_espera_segundos,
+            tempo_atendimento_segundos,
+            chamadas_realizadas,
+            converteu_venda,
+            valor_venda,
+            satisfacao,
+            observacao,
+            data_atendimento,
+            digisac_ticket_id,
+            protocolo,
+            digisac_user_id,
+            digisac_department_id,
+            ultima_sincronizacao_digisac
+          )
+          VALUES
+          (
+            $1, $2, $3, $4, $5,
+            'Digisac',
+            $6, $7, $8, $9,
+            $10, 0, false, 0,
+            null, $11, $12,
+            $13, $14, $15, $16, NOW()
+          )
+          `,
+          [
+            `Ticket ${ticket.protocol}`,
+            'Não informado',
+            null,
+            'Atendimento Virtual',
+            colaboradorId,
+            ticket.comments || 'Atendimento virtual Digisac',
+            null,
+            statusAtendimento,
+            tempoEspera,
+            tempoAtendimento,
+            `Ticket importado automaticamente da Digisac. ID: ${ticket.id}`,
+            dataAtendimento,
+            ticket.id,
+            ticket.protocol,
+            ticket.userId || null,
+            ticket.departmentId || null
+          ]
+        )
+
+        inseridos++
+      }
     }
 
-    console.log(`✅ Digisac CRM: ${inseridos} novos | ${ignorados} ignorados`)
+    console.log(
+      `✅ Tickets Digisac CRM: ${inseridos} novos | ${atualizados} atualizados | ${ignorados} ignorados`
+    )
   } catch (error) {
     console.error(
-      '❌ Erro na sincronização automática Digisac:',
+      '❌ Erro na sincronização automática dos tickets Digisac:',
       error.response?.data || error.message
     )
   }
 }
 
 async function executarSincronizacaoDigisac() {
-  await sincronizarDigisacCRM()
   await sincronizarColaboradoresDigisac()
+  await sincronizarDigisacCRM()
 }
 
 function iniciarSincronizacaoAutomatica() {
