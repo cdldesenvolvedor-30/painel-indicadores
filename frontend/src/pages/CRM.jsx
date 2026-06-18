@@ -313,8 +313,8 @@ opcoes={['Feminino', 'Masculino', 'Outro', 'Não informado']}
 
           <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
             <CardCRM titulo="Total de Contatos" valor={resumo?.total_contatos || 0} icon={Users} cor="blue" />
-            <CardCRM titulo="Tempo Médio Espera" valor={`${resumo?.tempo_medio_espera || 0) / 60).toFixed(2)} min`} icon={Clock3} cor="yellow" />
-            <CardCRM titulo="Tempo Médio Atendimento" valor={`${resumo?.tempo_medio_atendimento || 0) / 60).toFixed(2)} min`} icon={Phone} cor="green" />
+            <CardCRM titulo="Tempo Médio Espera" valor={`${((resumo?.tempo_medio_espera || 0) / 60).toFixed(2)} min`} icon={Clock3} cor="yellow" />
+            <CardCRM titulo="Tempo Médio Atendimento" valor={`${((resumo?.tempo_medio_atendimento || 0) / 60).toFixed(2)} min`} icon={Phone} cor="green" />
             <CardCRM titulo="Receita Gerada" valor={`R$ ${Number(resumo?.valor_total_vendas || 0).toLocaleString('pt-BR')}`} icon={DollarSign} cor="purple" />
           </section>
 
