@@ -23,7 +23,7 @@ const UNIDADES_PADRAO = [
   'Vieiralves',
   'The Office',
   'The Place',
-  'Milênio',
+  'Millennium',
   'Cristal',
   'Atlantic',
   'Zona Leste'
@@ -116,7 +116,7 @@ function statusPorVencimento(proximoVencimento) {
     }
   }
 
-  if (dias <= 30) {
+  if (dias <= 10) {
     return {
       tipo: 'proximo',
       texto: `Vence em ${dias} dia(s)`,
