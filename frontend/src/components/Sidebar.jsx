@@ -19,68 +19,11 @@ import {
   Building2,
   Database,
   Settings,
-  ChevronRight
+  ChevronRight,
+  ClipboardCheck
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
-
-const MENUS_BASE = {
-  Digisac: {
-    icon: Database,
-    itens: [
-      { to: '/indicadores', texto: 'Indicadores', icon: BarChart3 },
-      { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map },
-      { to: '/ranking', texto: 'Classificação', icon: Trophy },
-      { to: '/alertas', texto: 'Alertas', icon: Bell },
-      { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore },
-      { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target },
-      { to: '/metas', texto: 'Metas/KPIs', icon: Target }
-    ]
-  },
-
-  Shift: {
-    icon: Building2,
-    itens: []
-  },
-
-  Gestão: {
-    icon: Settings,
-    itens: [
-      { to: '/colaboradores', texto: 'Colaboradores', icon: Users },
-      { to: '/integracoes', texto: 'Integrações', icon: PlugZap },
-      { to: '/usuarios', texto: 'Usuários', icon: UserCog },
-      { to: '/logs', texto: 'Auditoria', icon: FileClock }
-    ]
-  }
-}
-
-function normalizarPerfil(perfil) {
-  return String(perfil || '').toLowerCase()
-}
-
-function moduloPermitidoPorPerfil(perfil, modulo) {
-  const perfilNormalizado = normalizarPerfil(perfil)
-
-  if (perfilNormalizado === 'admin') return true
-
-  if (perfilNormalizado === 'diretoria') {
-    return modulo !== 'Gestão'
-  }
-
-  if (perfilNormalizado === 'gerencia') {
-    return modulo !== 'Gestão'
-  }
-
-  if (perfilNormalizado === 'gestao') {
-    return modulo === 'Shift'
-  }
-
-  if (perfilNormalizado === 'supervisao') {
-    return modulo === 'Digisac'
-  }
-
-  return modulo === 'Digisac'
-}
 
 function Sidebar() {
   const location = useLocation()
@@ -94,25 +37,39 @@ function Sidebar() {
     navigate('/login')
   }
 
-  const menusPermitidos = Object.fromEntries(
-    Object.entries(MENUS_BASE).filter(([nome]) =>
-      moduloPermitidoPorPerfil(usuario?.perfil, nome)
-    )
-  )
+  const menus = {
+    Digisac: {
+      icon: Database,
+      itens: [
+        { to: '/indicadores', texto: 'Indicadores', icon: BarChart3 },
+        { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map },
+        { to: '/ranking', texto: 'Classificação', icon: Trophy },
+        { to: '/alertas', texto: 'Alertas', icon: Bell },
+        { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore },
+        { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target },
+        { to: '/metas', texto: 'Metas/KPIs', icon: Target }
+      ]
+    },
 
-  function abrirMenu(nome) {
-    if (menusPermitidos[nome]) {
-      setMenuAtual(nome)
+    Shift: {
+      icon: Building2,
+      itens: []
+    },
+
+    Gestão: {
+      icon: Settings,
+      itens: [
+        { to: '/colaboradores', texto: 'Colaboradores', icon: Users },
+        { to: '/integracoes', texto: 'Integrações', icon: PlugZap },
+        ...(usuario?.perfil === 'admin'
+          ? [
+              { to: '/usuarios', texto: 'Usuários', icon: UserCog },
+              { to: '/logs', texto: 'Auditoria', icon: FileClock }
+            ]
+          : [])
+      ]
     }
   }
-
-  function voltar() {
-    setMenuAtual(null)
-  }
-
-  const menuSelecionado = menuAtual && menusPermitidos[menuAtual]
-    ? menusPermitidos[menuAtual]
-    : null
 
   return (
     <aside className="w-72 min-h-screen bg-[#050b18] border-r border-blue-500/10 p-5 flex flex-col justify-between">
@@ -128,7 +85,7 @@ function Sidebar() {
           </div>
         </div>
 
-        {!menuSelecionado ? (
+        {!menuAtual ? (
           <nav className="space-y-3">
             <Item
               to="/dashboard"
@@ -137,19 +94,19 @@ function Sidebar() {
               texto="Início"
             />
 
-            {Object.entries(menusPermitidos).map(([nome, menu]) => (
+            {Object.entries(menus).map(([nome, menu]) => (
               <BotaoMenu
                 key={nome}
                 texto={nome}
                 icon={menu.icon}
-                onClick={() => abrirMenu(nome)}
+                onClick={() => setMenuAtual(nome)}
               />
             ))}
           </nav>
         ) : (
           <nav className="space-y-3">
             <button
-              onClick={voltar}
+              onClick={() => setMenuAtual(null)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 transition mb-5"
             >
               <ArrowLeft size={18} />
@@ -166,7 +123,7 @@ function Sidebar() {
               </h2>
             </div>
 
-            {menuSelecionado.itens.length === 0 && (
+            {menus[menuAtual].itens.length === 0 && (
               <div className="mt-8 bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center">
                 <p className="text-slate-300 font-semibold">
                   Nenhum indicador cadastrado
@@ -178,7 +135,7 @@ function Sidebar() {
               </div>
             )}
 
-            {menuSelecionado.itens.map((item) => (
+            {menus[menuAtual].itens.map((item) => (
               <Item
                 key={item.to}
                 to={item.to}
