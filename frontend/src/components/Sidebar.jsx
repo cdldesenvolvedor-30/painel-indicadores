@@ -56,6 +56,17 @@ function Sidebar() {
       itens: []
     },
 
+    Atendimento: {
+  icon: ClipboardCheck,
+  itens: [
+    {
+      to: '/atendimento-compliance',
+      texto: 'Compliance das Unidades',
+      icon: ClipboardCheck
+    }
+  ]
+},
+    
     Gestão: {
       icon: Settings,
       itens: [
