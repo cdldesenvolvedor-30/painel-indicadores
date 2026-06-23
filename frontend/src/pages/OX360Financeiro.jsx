@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
+import * as XLSX from 'xlsx'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const STORAGE_KEY = 'ox360_financeiro_valores'
-
 const RAZAO_AREA_PADRAO = 21.92
 
 const CAMPOS_FIXOS = [
@@ -59,28 +61,24 @@ function OX360Financeiro() {
 
   const [dados, setDados] = useState(() => {
     const salvo = localStorage.getItem(STORAGE_KEY)
+    if (!salvo) return valorInicial()
 
-    if (salvo) {
-      try {
-        const dadosSalvos = JSON.parse(salvo)
-
-        return {
-          ...valorInicial(),
-          ...dadosSalvos,
-          fixos: {
-            ...valorInicial().fixos,
-            ...(dadosSalvos.fixos || {})
-          },
-          manuais: dadosSalvos.manuais || {},
-          importados: dadosSalvos.importados || {},
-          historico: dadosSalvos.historico || []
-        }
-      } catch {
-        return valorInicial()
+    try {
+      const dadosSalvos = JSON.parse(salvo)
+      return {
+        ...valorInicial(),
+        ...dadosSalvos,
+        fixos: {
+          ...valorInicial().fixos,
+          ...(dadosSalvos.fixos || {})
+        },
+        manuais: dadosSalvos.manuais || {},
+        importados: dadosSalvos.importados || {},
+        historico: dadosSalvos.historico || []
       }
+    } catch {
+      return valorInicial()
     }
-
-    return valorInicial()
   })
 
   const resumo = useMemo(() => {
@@ -121,39 +119,34 @@ function OX360Financeiro() {
   }
 
   function atualizarGrupo(grupo, key, valor) {
-    const novosDados = {
+    salvar({
       ...dados,
       [grupo]: {
         ...dados[grupo],
         [key]: converterNumero(valor)
       }
-    }
-
-    salvar(novosDados)
+    })
   }
 
   function atualizarCampo(key, valor) {
-    const novosDados = {
+    salvar({
       ...dados,
       [key]: key === 'razaoArea' ? converterNumero(valor) : valor
-    }
-
-    salvar(novosDados)
+    })
   }
 
   function limparTabela() {
-    const novosDados = {
+    salvar({
       ...dados,
       manuais: {},
       importados: {}
-    }
+    })
 
-    salvar(novosDados)
     toast.success('Tabela limpa. Os valores fixos foram mantidos.')
   }
 
-  function gerarRelatorio() {
-    const novoRelatorio = {
+  function montarRelatorio() {
+    return {
       id: Date.now(),
       data: new Date().toLocaleString('pt-BR'),
       mesReferencia: dados.mesReferencia,
@@ -165,97 +158,38 @@ function OX360Financeiro() {
       dados,
       resumo
     }
+  }
+
+  function gerarRelatorio() {
+    const relatorio = montarRelatorio()
 
     const novosDados = {
       ...dados,
-      historico: [novoRelatorio, ...(dados.historico || [])]
+      historico: [relatorio, ...(dados.historico || [])]
     }
 
     salvar(novosDados)
-    baixarRelatorioJSON(novoRelatorio)
-    toast.success('Relatório gerado, baixado e salvo no histórico.')
+    gerarPDFRelatorio(relatorio)
+    toast.success('Relatório PDF gerado e salvo no histórico.')
   }
 
   function removerRelatorio(id) {
-    const novosDados = {
+    salvar({
       ...dados,
       historico: dados.historico.filter((item) => item.id !== id)
-    }
+    })
 
-    salvar(novosDados)
     toast.success('Relatório removido do histórico.')
   }
 
-  function baixarRelatorioJSON(relatorio) {
-    const conteudo = JSON.stringify(relatorio, null, 2)
-
-    const blob = new Blob([conteudo], {
-      type: 'application/json'
-    })
-
-    const url = URL.createObjectURL(blob)
-
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `OX360_${String(relatorio.mesReferencia).replace('/', '_')}.json`
-    link.click()
-
-    URL.revokeObjectURL(url)
-  }
-
   function exportarPlanilhaCompleta() {
-    const linhas = [
-      ['OX360 Financeiro'],
-      ['Mês Referência', dados.mesReferencia],
-      ['Razão da Área', `${dados.razaoArea}%`],
-      [],
-      ['Resumo'],
-      ['Receita Total', resumo.entradas],
-      ['Despesa Total', resumo.saidas],
-      ['Lucro Líquido', resumo.lucro],
-      ['Margem Líquida', `${resumo.margem.toFixed(2)}%`],
-      ['Saldo Acumulado', resumo.saldoAcumulado],
-      [],
-      ['Valores Fixos'],
-      ...CAMPOS_FIXOS.map((campo) => [
-        campo.nome,
-        dados.fixos?.[campo.key] || 0
-      ]),
-      [],
-      ['Valores Manuais'],
-      ...CAMPOS_MANUAIS.map((campo) => [
-        campo.nome,
-        dados.manuais?.[campo.key] || 0
-      ]),
-      [],
-      ['Valores Importados'],
-      ...CAMPOS_IMPORTADOS.map((campo) => [
-        campo.nome,
-        dados.importados?.[campo.key] || 0
-      ])
-    ]
-
-    const csv = linhas.map((linha) => linha.join(';')).join('\n')
-
-    const blob = new Blob([csv], {
-      type: 'text/csv;charset=utf-8;'
-    })
-
-    const url = URL.createObjectURL(blob)
-
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `OX360_Financeiro_${String(dados.mesReferencia).replace('/', '_')}.csv`
-    link.click()
-
-    URL.revokeObjectURL(url)
-
-    toast.success('Planilha completa exportada com sucesso.')
+    gerarExcelRelatorio(montarRelatorio())
+    toast.success('Planilha Excel exportada com sucesso.')
   }
 
-  function gerarPDFCompleto() {
-    window.print()
-    toast.success('PDF preparado para impressão/salvamento.')
+  function baixarRelatorio(relatorio) {
+    gerarPDFRelatorio(relatorio)
+    toast.success('Relatório baixado novamente.')
   }
 
   return (
@@ -370,72 +304,7 @@ function OX360Financeiro() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-950/70 text-blue-300">
-              <tr>
-                <th className="text-left p-3">Descrição</th>
-                <th className="text-right p-3">Valor Total</th>
-                <th className="text-right p-3">Razão Área</th>
-                <th className="text-right p-3">Valor da Área</th>
-                <th className="text-right p-3">Saída</th>
-                <th className="text-right p-3">Entrada</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {CAMPOS_FIXOS.map((campo) => (
-                <LinhaResumo
-                  key={campo.key}
-                  nome={campo.nome}
-                  valor={dados.fixos?.[campo.key] || 0}
-                  razao={dados.razaoArea}
-                  aplicarRazao
-                />
-              ))}
-
-              {CAMPOS_MANUAIS.map((campo) => (
-                <LinhaResumo
-                  key={campo.key}
-                  nome={campo.nome}
-                  valor={dados.manuais?.[campo.key] || 0}
-                  razao={campo.key === 'saldoAnterior' ? null : 'Não se aplica'}
-                  entrada={campo.key === 'saldoAnterior'}
-                />
-              ))}
-
-              {CAMPOS_IMPORTADOS.map((campo) => (
-                <LinhaResumo
-                  key={campo.key}
-                  nome={campo.nome}
-                  valor={dados.importados?.[campo.key] || 0}
-                  entrada={campo.key.includes('faturamento')}
-                />
-              ))}
-
-              <tr className="bg-slate-950/80 font-bold">
-                <td className="p-3">TOTAL</td>
-                <td className="p-3 text-right">-</td>
-                <td className="p-3 text-right">{dados.razaoArea}%</td>
-                <td className="p-3 text-right">{moeda(resumo.saidasFixasRateadas)}</td>
-                <td className="p-3 text-right text-red-300">{moeda(resumo.saidas)}</td>
-                <td className="p-3 text-right text-green-300">{moeda(resumo.entradas)}</td>
-              </tr>
-
-              <tr className="bg-green-900/30 font-bold">
-                <td className="p-3">RESULTADO DO MÊS</td>
-                <td colSpan="4" className="p-3 text-right">Lucro líquido</td>
-                <td className="p-3 text-right text-green-300">{moeda(resumo.lucro)}</td>
-              </tr>
-
-              <tr className="bg-blue-900/30 font-bold">
-                <td className="p-3">SALDO ACUMULADO</td>
-                <td colSpan="4" className="p-3 text-right">Resultado + saldo anterior</td>
-                <td className="p-3 text-right text-blue-300">{moeda(resumo.saldoAcumulado)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <TabelaResumo dados={dados} resumo={resumo} />
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -458,7 +327,7 @@ function OX360Financeiro() {
             </button>
 
             <button
-              onClick={gerarPDFCompleto}
+              onClick={gerarRelatorio}
               className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
             >
               Gerar PDF Completo
@@ -489,10 +358,17 @@ function OX360Financeiro() {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => baixarRelatorioJSON(relatorio)}
+                    onClick={() => baixarRelatorio(relatorio)}
                     className="bg-blue-600 hover:bg-blue-500 transition rounded-xl px-4 py-2 font-bold"
                   >
-                    Baixar
+                    Baixar PDF
+                  </button>
+
+                  <button
+                    onClick={() => gerarExcelRelatorio(relatorio)}
+                    className="bg-slate-700 hover:bg-slate-600 transition rounded-xl px-4 py-2 font-bold"
+                  >
+                    Baixar Excel
                   </button>
 
                   <button
@@ -508,6 +384,240 @@ function OX360Financeiro() {
         )}
       </section>
     </main>
+  )
+}
+
+function gerarExcelRelatorio(relatorio) {
+  const wb = XLSX.utils.book_new()
+
+  const resumo = [
+    ['OX360 FINANCEIRO'],
+    ['Relatório Executivo CDL'],
+    [],
+    ['Mês Referência', relatorio.mesReferencia],
+    ['Gerado em', relatorio.data],
+    [],
+    ['Indicador', 'Valor'],
+    ['Receita Total', relatorio.receitaTotal],
+    ['Despesa Total', relatorio.despesaTotal],
+    ['Lucro Líquido', relatorio.lucroLiquido],
+    ['Margem Líquida', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`],
+    ['Saldo Acumulado', relatorio.saldoAcumulado]
+  ]
+
+  const wsResumo = XLSX.utils.aoa_to_sheet(resumo)
+  wsResumo['!cols'] = [{ wch: 28 }, { wch: 22 }]
+  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Executivo')
+
+  adicionarAba(wb, 'Valores Fixos', CAMPOS_FIXOS, relatorio.dados.fixos)
+  adicionarAba(wb, 'Valores Manuais', CAMPOS_MANUAIS, relatorio.dados.manuais)
+  adicionarAba(wb, 'Valores Importados', CAMPOS_IMPORTADOS, relatorio.dados.importados)
+
+  const consolidado = montarLinhasConsolidadas(relatorio.dados, relatorio.resumo)
+  const wsConsolidado = XLSX.utils.aoa_to_sheet([
+    ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
+    ...consolidado
+  ])
+  wsConsolidado['!cols'] = [
+    { wch: 36 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 18 },
+    { wch: 18 }
+  ]
+  XLSX.utils.book_append_sheet(wb, wsConsolidado, 'Consolidado')
+
+  XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
+}
+
+function adicionarAba(wb, nomeAba, campos, valores = {}) {
+  const linhas = [
+    ['Descrição', 'Valor'],
+    ...campos.map((campo) => [campo.nome, valores?.[campo.key] || 0])
+  ]
+
+  const ws = XLSX.utils.aoa_to_sheet(linhas)
+  ws['!cols'] = [{ wch: 38 }, { wch: 18 }]
+  XLSX.utils.book_append_sheet(wb, ws, nomeAba)
+}
+
+function gerarPDFRelatorio(relatorio) {
+  const doc = new jsPDF('p', 'mm', 'a4')
+
+  doc.setFillColor(2, 8, 23)
+  doc.rect(0, 0, 210, 297, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(22)
+  doc.text('OX360 Financeiro', 16, 22)
+
+  doc.setTextColor(96, 165, 250)
+  doc.setFontSize(11)
+  doc.text('Relatório Executivo CDL', 16, 30)
+
+  doc.setTextColor(203, 213, 225)
+  doc.text(`Mês referência: ${relatorio.mesReferencia}`, 16, 40)
+  doc.text(`Gerado em: ${relatorio.data}`, 16, 47)
+
+  const cards = [
+    ['Receita Total', moeda(relatorio.receitaTotal)],
+    ['Despesa Total', moeda(relatorio.despesaTotal)],
+    ['Lucro Líquido', moeda(relatorio.lucroLiquido)],
+    ['Margem Líquida', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`],
+    ['Saldo Acumulado', moeda(relatorio.saldoAcumulado)]
+  ]
+
+  let x = 16
+  let y = 60
+
+  cards.forEach((card, index) => {
+    if (index === 3) {
+      x = 16
+      y += 27
+    }
+
+    doc.setFillColor(15, 23, 42)
+    doc.roundedRect(x, y, 55, 20, 4, 4, 'F')
+
+    doc.setTextColor(148, 163, 184)
+    doc.setFontSize(8)
+    doc.text(card[0], x + 4, y + 7)
+
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(12)
+    doc.text(card[1], x + 4, y + 15)
+
+    x += 60
+  })
+
+  autoTable(doc, {
+    startY: 118,
+    head: [['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada']],
+    body: montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).map((linha) => [
+      linha[0],
+      moeda(linha[1]),
+      linha[2],
+      linha[3] ? moeda(linha[3]) : '-',
+      linha[4] ? moeda(linha[4]) : '-',
+      linha[5] ? moeda(linha[5]) : '-'
+    ]),
+    theme: 'grid',
+    styles: {
+      fontSize: 7,
+      textColor: [226, 232, 240],
+      fillColor: [15, 23, 42],
+      lineColor: [51, 65, 85]
+    },
+    headStyles: {
+      fillColor: [37, 99, 235],
+      textColor: [255, 255, 255]
+    },
+    alternateRowStyles: {
+      fillColor: [2, 8, 23]
+    }
+  })
+
+  doc.save(`OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`)
+}
+
+function montarLinhasConsolidadas(dados, resumo) {
+  const linhasFixos = CAMPOS_FIXOS.map((campo) => {
+    const valor = Number(dados.fixos?.[campo.key] || 0)
+    const valorArea = valor * (Number(dados.razaoArea || 0) / 100)
+    return [campo.nome, valor, `${dados.razaoArea}%`, valorArea, valorArea, 0]
+  })
+
+  const linhasManuais = CAMPOS_MANUAIS.map((campo) => {
+    const valor = Number(dados.manuais?.[campo.key] || 0)
+    const entrada = campo.key === 'saldoAnterior'
+    return [campo.nome, valor, 'Não se aplica', 0, entrada ? 0 : valor, entrada ? valor : 0]
+  })
+
+  const linhasImportados = CAMPOS_IMPORTADOS.map((campo) => {
+    const valor = Number(dados.importados?.[campo.key] || 0)
+    const entrada = campo.key.includes('faturamento')
+    return [campo.nome, valor, 'Importado', 0, entrada ? 0 : valor, entrada ? valor : 0]
+  })
+
+  return [
+    ...linhasFixos,
+    ...linhasManuais,
+    ...linhasImportados,
+    ['TOTAL', 0, `${dados.razaoArea}%`, resumo.saidasFixasRateadas, resumo.saidas, resumo.entradas],
+    ['RESULTADO DO MÊS', 0, '-', 0, 0, resumo.lucro],
+    ['SALDO ACUMULADO', 0, '-', 0, 0, resumo.saldoAcumulado]
+  ]
+}
+
+function TabelaResumo({ dados, resumo }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-950/70 text-blue-300">
+          <tr>
+            <th className="text-left p-3">Descrição</th>
+            <th className="text-right p-3">Valor Total</th>
+            <th className="text-right p-3">Razão Área</th>
+            <th className="text-right p-3">Valor da Área</th>
+            <th className="text-right p-3">Saída</th>
+            <th className="text-right p-3">Entrada</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {CAMPOS_FIXOS.map((campo) => (
+            <LinhaResumo
+              key={campo.key}
+              nome={campo.nome}
+              valor={dados.fixos?.[campo.key] || 0}
+              razao={dados.razaoArea}
+              aplicarRazao
+            />
+          ))}
+
+          {CAMPOS_MANUAIS.map((campo) => (
+            <LinhaResumo
+              key={campo.key}
+              nome={campo.nome}
+              valor={dados.manuais?.[campo.key] || 0}
+              razao={campo.key === 'saldoAnterior' ? null : 'Não se aplica'}
+              entrada={campo.key === 'saldoAnterior'}
+            />
+          ))}
+
+          {CAMPOS_IMPORTADOS.map((campo) => (
+            <LinhaResumo
+              key={campo.key}
+              nome={campo.nome}
+              valor={dados.importados?.[campo.key] || 0}
+              entrada={campo.key.includes('faturamento')}
+            />
+          ))}
+
+          <tr className="bg-slate-950/80 font-bold">
+            <td className="p-3">TOTAL</td>
+            <td className="p-3 text-right">-</td>
+            <td className="p-3 text-right">{dados.razaoArea}%</td>
+            <td className="p-3 text-right">{moeda(resumo.saidasFixasRateadas)}</td>
+            <td className="p-3 text-right text-red-300">{moeda(resumo.saidas)}</td>
+            <td className="p-3 text-right text-green-300">{moeda(resumo.entradas)}</td>
+          </tr>
+
+          <tr className="bg-green-900/30 font-bold">
+            <td className="p-3">RESULTADO DO MÊS</td>
+            <td colSpan="4" className="p-3 text-right">Lucro líquido</td>
+            <td className="p-3 text-right text-green-300">{moeda(resumo.lucro)}</td>
+          </tr>
+
+          <tr className="bg-blue-900/30 font-bold">
+            <td className="p-3">SALDO ACUMULADO</td>
+            <td colSpan="4" className="p-3 text-right">Resultado + saldo anterior</td>
+            <td className="p-3 text-right text-blue-300">{moeda(resumo.saldoAcumulado)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -546,9 +656,7 @@ function PainelCampos({
                 onChange={(e) => onChange(grupo, campo.key, e.target.value)}
                 disabled={!editavel}
                 className={`w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 pr-4 py-3 outline-none focus:border-blue-500 ${
-                  !editavel
-                    ? 'opacity-70 cursor-not-allowed text-slate-400'
-                    : ''
+                  !editavel ? 'opacity-70 cursor-not-allowed text-slate-400' : ''
                 }`}
                 placeholder="0,00"
               />
@@ -567,18 +675,10 @@ function LinhaResumo({ nome, valor, razao, aplicarRazao, entrada }) {
     <tr className="border-b border-slate-800">
       <td className="p-3">{nome}</td>
       <td className="p-3 text-right">{moeda(valor)}</td>
-      <td className="p-3 text-right">
-        {razao ? `${razao}%` : '-'}
-      </td>
-      <td className="p-3 text-right">
-        {aplicarRazao ? moeda(valorArea) : '-'}
-      </td>
-      <td className="p-3 text-right text-red-300">
-        {!entrada ? moeda(valorArea) : '-'}
-      </td>
-      <td className="p-3 text-right text-green-300">
-        {entrada ? moeda(valor) : '-'}
-      </td>
+      <td className="p-3 text-right">{razao ? `${razao}%` : '-'}</td>
+      <td className="p-3 text-right">{aplicarRazao ? moeda(valorArea) : '-'}</td>
+      <td className="p-3 text-right text-red-300">{!entrada ? moeda(valorArea) : '-'}</td>
+      <td className="p-3 text-right text-green-300">{entrada ? moeda(valor) : '-'}</td>
     </tr>
   )
 }
@@ -606,7 +706,6 @@ function somaObjeto(obj = {}) {
 
 function converterNumero(valor) {
   if (typeof valor === 'number') return valor
-
   return Number(String(valor).replace(',', '.')) || 0
 }
 
@@ -615,6 +714,10 @@ function moeda(valor) {
     style: 'currency',
     currency: 'BRL'
   })
+}
+
+function nomeArquivo(nome) {
+  return String(nome || 'Relatorio').replaceAll('/', '_').replaceAll(' ', '_')
 }
 
 export default OX360Financeiro
