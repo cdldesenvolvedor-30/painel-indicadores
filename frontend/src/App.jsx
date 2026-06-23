@@ -22,6 +22,7 @@ import ComparativoMetas from './pages/ComparativoMetas'
 import CRM from './pages/CRM'
 import Integracoes from './pages/Integracoes'
 import AtendimentoCompliance from './pages/AtendimentoCompliance'
+import OX360Financeiro from './pages/OX360Financeiro'
 
 import Sidebar from './components/Sidebar'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -241,6 +242,17 @@ function App() {
     <ProtectedRoute>
       <Layout>
         <AtendimentoCompliance />
+      </Layout>
+    </ProtectedRoute>
+  }
+/>
+        
+            <Route
+  path="/ox360-financeiro"
+  element={
+    <ProtectedRoute>
+      <Layout>
+        <OX360Financeiro />
       </Layout>
     </ProtectedRoute>
   }
