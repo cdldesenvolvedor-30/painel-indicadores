@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 
 const STORAGE_KEY = 'ox360_financeiro_valores'
 
@@ -82,6 +83,38 @@ function OX360Financeiro() {
     return valorInicial()
   })
 
+  const resumo = useMemo(() => {
+    const fixosTotal = somaObjeto(dados.fixos)
+    const manuaisTotal = somaObjeto(dados.manuais)
+
+    const entradas =
+      Number(dados.importados?.faturamentoParticular || 0) +
+      Number(dados.importados?.faturamentoConvenio || 0)
+
+    const saidasFixasRateadas =
+      fixosTotal * (Number(dados.razaoArea || 0) / 100)
+
+    const saidas =
+      saidasFixasRateadas +
+      manuaisTotal +
+      Number(dados.importados?.estoqueMateriais || 0) +
+      Number(dados.importados?.assessoriaTecnica || 0)
+
+    const lucro = entradas - saidas
+    const saldoAcumulado = lucro + Number(dados.manuais?.saldoAnterior || 0)
+    const margem = entradas > 0 ? (lucro / entradas) * 100 : 0
+
+    return {
+      entradas,
+      saidas,
+      lucro,
+      saldoAcumulado,
+      margem,
+      fixosTotal,
+      saidasFixasRateadas
+    }
+  }, [dados])
+
   function salvar(novosDados = dados) {
     setDados(novosDados)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(novosDados))
@@ -116,6 +149,7 @@ function OX360Financeiro() {
     }
 
     salvar(novosDados)
+    toast.success('Tabela limpa. Os valores fixos foram mantidos.')
   }
 
   function gerarRelatorio() {
@@ -127,7 +161,9 @@ function OX360Financeiro() {
       despesaTotal: resumo.saidas,
       lucroLiquido: resumo.lucro,
       margemLiquida: resumo.margem,
-      saldoAcumulado: resumo.saldoAcumulado
+      saldoAcumulado: resumo.saldoAcumulado,
+      dados,
+      resumo
     }
 
     const novosDados = {
@@ -136,7 +172,8 @@ function OX360Financeiro() {
     }
 
     salvar(novosDados)
-    alert('Relatório gerado e salvo no histórico.')
+    baixarRelatorioJSON(novoRelatorio)
+    toast.success('Relatório gerado, baixado e salvo no histórico.')
   }
 
   function removerRelatorio(id) {
@@ -146,41 +183,80 @@ function OX360Financeiro() {
     }
 
     salvar(novosDados)
+    toast.success('Relatório removido do histórico.')
   }
 
-  const resumo = useMemo(() => {
-    const fixosTotal = somaObjeto(dados.fixos)
-    const manuaisTotal = somaObjeto(dados.manuais)
-    const importadosTotal = somaObjeto(dados.importados)
+  function baixarRelatorioJSON(relatorio) {
+    const conteudo = JSON.stringify(relatorio, null, 2)
 
-    const entradas =
-      Number(dados.importados?.faturamentoParticular || 0) +
-      Number(dados.importados?.faturamentoConvenio || 0)
+    const blob = new Blob([conteudo], {
+      type: 'application/json'
+    })
 
-    const saidasFixasRateadas =
-      fixosTotal * (Number(dados.razaoArea || 0) / 100)
+    const url = URL.createObjectURL(blob)
 
-    const saidas =
-      saidasFixasRateadas +
-      manuaisTotal +
-      Number(dados.importados?.estoqueMateriais || 0) +
-      Number(dados.importados?.assessoriaTecnica || 0)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `OX360_${String(relatorio.mesReferencia).replace('/', '_')}.json`
+    link.click()
 
-    const lucro = entradas - saidas
-    const saldoAcumulado = lucro + Number(dados.manuais?.saldoAnterior || 0)
-    const margem = entradas > 0 ? (lucro / entradas) * 100 : 0
+    URL.revokeObjectURL(url)
+  }
 
-    return {
-      entradas,
-      saidas,
-      lucro,
-      saldoAcumulado,
-      margem,
-      fixosTotal,
-      importadosTotal,
-      saidasFixasRateadas
-    }
-  }, [dados])
+  function exportarPlanilhaCompleta() {
+    const linhas = [
+      ['OX360 Financeiro'],
+      ['Mês Referência', dados.mesReferencia],
+      ['Razão da Área', `${dados.razaoArea}%`],
+      [],
+      ['Resumo'],
+      ['Receita Total', resumo.entradas],
+      ['Despesa Total', resumo.saidas],
+      ['Lucro Líquido', resumo.lucro],
+      ['Margem Líquida', `${resumo.margem.toFixed(2)}%`],
+      ['Saldo Acumulado', resumo.saldoAcumulado],
+      [],
+      ['Valores Fixos'],
+      ...CAMPOS_FIXOS.map((campo) => [
+        campo.nome,
+        dados.fixos?.[campo.key] || 0
+      ]),
+      [],
+      ['Valores Manuais'],
+      ...CAMPOS_MANUAIS.map((campo) => [
+        campo.nome,
+        dados.manuais?.[campo.key] || 0
+      ]),
+      [],
+      ['Valores Importados'],
+      ...CAMPOS_IMPORTADOS.map((campo) => [
+        campo.nome,
+        dados.importados?.[campo.key] || 0
+      ])
+    ]
+
+    const csv = linhas.map((linha) => linha.join(';')).join('\n')
+
+    const blob = new Blob([csv], {
+      type: 'text/csv;charset=utf-8;'
+    })
+
+    const url = URL.createObjectURL(blob)
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `OX360_Financeiro_${String(dados.mesReferencia).replace('/', '_')}.csv`
+    link.click()
+
+    URL.revokeObjectURL(url)
+
+    toast.success('Planilha completa exportada com sucesso.')
+  }
+
+  function gerarPDFCompleto() {
+    window.print()
+    toast.success('PDF preparado para impressão/salvamento.')
+  }
 
   return (
     <main className="min-h-screen bg-[#020817] text-white p-8 overflow-y-auto">
@@ -235,7 +311,10 @@ function OX360Financeiro() {
           editavel={editandoFixos}
           acao={
             <button
-              onClick={() => setEditandoFixos(!editandoFixos)}
+              onClick={() => {
+                setEditandoFixos(!editandoFixos)
+                if (editandoFixos) toast.success('Valores fixos salvos.')
+              }}
               className={`px-4 py-2 rounded-xl font-bold transition ${
                 editandoFixos
                   ? 'bg-green-600 hover:bg-green-500'
@@ -371,11 +450,17 @@ function OX360Financeiro() {
           <h2 className="text-xl font-bold mb-4">Exportações</h2>
 
           <div className="space-y-3">
-            <button className="w-full bg-slate-800 hover:bg-slate-700 transition rounded-xl p-4 font-bold">
+            <button
+              onClick={exportarPlanilhaCompleta}
+              className="w-full bg-slate-800 hover:bg-slate-700 transition rounded-xl p-4 font-bold"
+            >
               Exportar Planilha Completa
             </button>
 
-            <button className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold">
+            <button
+              onClick={gerarPDFCompleto}
+              className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
+            >
               Gerar PDF Completo
             </button>
           </div>
@@ -403,7 +488,10 @@ function OX360Financeiro() {
                 </div>
 
                 <div className="flex gap-2">
-                  <button className="bg-blue-600 hover:bg-blue-500 transition rounded-xl px-4 py-2 font-bold">
+                  <button
+                    onClick={() => baixarRelatorioJSON(relatorio)}
+                    className="bg-blue-600 hover:bg-blue-500 transition rounded-xl px-4 py-2 font-bold"
+                  >
                     Baixar
                   </button>
 
