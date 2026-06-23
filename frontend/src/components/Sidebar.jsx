@@ -81,7 +81,7 @@ function Sidebar() {
       ]
     },
 
-      Diretoria: {
+       Diretoria: {
   icon: BriefcaseBusiness,
   itens: [
     {
@@ -91,7 +91,8 @@ function Sidebar() {
     }
   ]
 }
-
+}
+  
   return (
     <aside className="w-72 min-h-screen bg-[#050b18] border-r border-blue-500/10 p-5 flex flex-col justify-between">
       <div>
