@@ -327,7 +327,7 @@ function OX360Financeiro() {
             </button>
 
             <button
-              onClick={gerarRelatorio}
+               onClick={() => gerarPDFRelatorio(montarRelatorio())}
               className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
             >
               Gerar PDF Completo
@@ -358,7 +358,7 @@ function OX360Financeiro() {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => baixarRelatorio(relatorio)}
+                    onClick={() => gerarPDFRelatorio(relatorio)}
                     className="bg-blue-600 hover:bg-blue-500 transition rounded-xl px-4 py-2 font-bold"
                   >
                     Baixar PDF
