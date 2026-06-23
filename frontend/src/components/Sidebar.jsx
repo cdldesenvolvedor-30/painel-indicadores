@@ -20,7 +20,9 @@ import {
   Database,
   Settings,
   ChevronRight,
-  ClipboardCheck
+  ClipboardCheck,
+  BriefcaseBusiness,
+  WalletCards
 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
