@@ -3,19 +3,18 @@ import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import {
+  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   Tooltip,
-  ResponsiveContainer,
   Legend,
-  PieChart,
-  Pie,
-  Cell,
   LineChart,
   Line,
-  CartesianGrid
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts'
 
 const STORAGE_KEY = 'ox360_financeiro_valores'
@@ -23,6 +22,15 @@ const RAZAO_AREA_PADRAO = 21.92
 
 const LOGO_PAINEL_BI_URL = '/logo-painel.png'
 const LOGO_CDL_URL = '/logo-cdl.png'
+
+const CORES_GRAFICO = {
+  azul: '#2563eb',
+  verde: '#22c55e',
+  vermelho: '#ef4444',
+  roxo: '#a855f7',
+  amarelo: '#f59e0b',
+  ciano: '#06b6d4'
+}
 
 const CAMPOS_FIXOS = [
   { key: 'iptu', nome: 'IPTU 2025' },
@@ -35,10 +43,8 @@ const CAMPOS_FIXOS = [
 ]
 
 const CAMPOS_MANUAIS = [
-  { key: 'materialLimpeza', nome: 'Material Limpeza' },
   { key: 'luz', nome: 'Luz' },
   { key: 'marketing', nome: 'MKT / Tráfego SXT' },
-  { key: 'almoxarifado', nome: 'Almoxarifado' },
   { key: 'impostos', nome: 'Impostos' },
   { key: 'examesUrgencia', nome: 'PGTO Exames de Urgência' },
   { key: 'precoColeta', nome: 'Preço Coleta' },
@@ -50,8 +56,31 @@ const CAMPOS_MANUAIS = [
 const CAMPOS_IMPORTADOS = [
   { key: 'faturamentoParticular', nome: 'Faturamento Particular' },
   { key: 'faturamentoConvenio', nome: 'Faturamento Convênio' },
-  { key: 'estoqueMateriais', nome: 'Materiais / Estoque' },
+  { key: 'materialLimpeza', nome: 'Material Limpeza' },
+  { key: 'almoxarifado', nome: 'Almoxarifado' },
   { key: 'assessoriaTecnica', nome: 'Assessoria Técnica' }
+]
+
+const LIMPEZA_KEYWORDS = [
+  'LIMPEZA',
+  'ÁLCOOL',
+  'ALCOOL',
+  'PAPEL',
+  'SACO',
+  'MÁSCARA',
+  'MASCARA',
+  'LUVA',
+  'DETERGENTE',
+  'DESINFETANTE',
+  'SABONETE',
+  'SABAO',
+  'SABÃO',
+  'VASSOURA',
+  'ESPONJA',
+  'TOALHA',
+  'BOM AR',
+  'SANITARIA',
+  'SANITÁRIA'
 ]
 
 function valorInicial() {
@@ -69,18 +98,18 @@ function valorInicial() {
     },
     manuais: {},
     importados: {},
+    historico: [],
+    arquivosImportados: {},
     detalhesImportados: {
       faturamento: [],
       estoque: [],
       assessoria: []
-    },
-    arquivosImportados: [],
-    historico: []
+    }
   }
 }
 
 function OX360Financeiro() {
-  const inputArquivosRef = useRef(null)
+  const inputRef = useRef(null)
   const [editandoFixos, setEditandoFixos] = useState(false)
   const [importando, setImportando] = useState(false)
 
@@ -99,12 +128,12 @@ function OX360Financeiro() {
         },
         manuais: dadosSalvos.manuais || {},
         importados: dadosSalvos.importados || {},
+        historico: dadosSalvos.historico || [],
+        arquivosImportados: dadosSalvos.arquivosImportados || {},
         detalhesImportados: {
           ...valorInicial().detalhesImportados,
           ...(dadosSalvos.detalhesImportados || {})
-        },
-        arquivosImportados: dadosSalvos.arquivosImportados || [],
-        historico: dadosSalvos.historico || []
+        }
       }
     } catch {
       return valorInicial()
@@ -112,7 +141,9 @@ function OX360Financeiro() {
   })
 
   const resumo = useMemo(() => calcularResumo(dados), [dados])
-  const dadosGraficos = useMemo(() => montarDadosGraficos(dados, resumo), [dados, resumo])
+  const dadosGraficoFinanceiro = useMemo(() => criarDadosGraficoFinanceiro(dados, resumo), [dados, resumo])
+  const dadosGraficoHistorico = useMemo(() => criarDadosGraficoHistorico(dados, resumo), [dados, resumo])
+  const dadosGraficoComposicao = useMemo(() => criarDadosGraficoComposicao(dados, resumo), [dados, resumo])
 
   function salvar(novosDados = dados) {
     setDados(novosDados)
@@ -141,60 +172,24 @@ function OX360Financeiro() {
       ...dados,
       manuais: {},
       importados: {},
-      detalhesImportados: valorInicial().detalhesImportados,
-      arquivosImportados: []
+      arquivosImportados: {},
+      detalhesImportados: valorInicial().detalhesImportados
     })
-    toast.success('Tabela limpa. Os valores fixos foram mantidos.')
+    toast.success('Tabela limpa. Os valores fixos e o histórico foram mantidos.')
   }
 
-  async function processarArquivos(event) {
+  async function importarPlanilhas(event) {
     const arquivos = Array.from(event.target.files || [])
+    event.target.value = ''
+
     if (arquivos.length === 0) return
 
     setImportando(true)
 
     try {
-      const resultado = {
-        importados: {
-          faturamentoParticular: 0,
-          faturamentoConvenio: 0,
-          estoqueMateriais: 0,
-          assessoriaTecnica: 0
-        },
-        detalhesImportados: {
-          faturamento: [],
-          estoque: [],
-          assessoria: []
-        },
-        arquivosImportados: []
-      }
+      const resultado = await processarArquivosImportados(arquivos, dados.mesReferencia)
 
-      for (const arquivo of arquivos) {
-        const workbook = await lerArquivoExcel(arquivo)
-        const tipo = identificarTipoArquivo(arquivo.name, workbook)
-
-        if (tipo === 'faturamento') {
-          const parcial = extrairFaturamento(workbook, dados.mesReferencia)
-          resultado.importados.faturamentoParticular += parcial.particular
-          resultado.importados.faturamentoConvenio += parcial.convenio
-          resultado.detalhesImportados.faturamento.push(...parcial.detalhes)
-          resultado.arquivosImportados.push({ nome: arquivo.name, tipo: 'Faturamento', registros: parcial.detalhes.length })
-        } else if (tipo === 'estoque') {
-          const parcial = extrairEstoque(workbook)
-          resultado.importados.estoqueMateriais += parcial.total
-          resultado.detalhesImportados.estoque.push(...parcial.detalhes)
-          resultado.arquivosImportados.push({ nome: arquivo.name, tipo: 'Estoque', registros: parcial.detalhes.length })
-        } else if (tipo === 'assessoria') {
-          const parcial = extrairAssessoria(workbook, dados.mesReferencia)
-          resultado.importados.assessoriaTecnica += parcial.valorFinanceiro
-          resultado.detalhesImportados.assessoria.push(...parcial.detalhes)
-          resultado.arquivosImportados.push({ nome: arquivo.name, tipo: 'Assessoria Técnica', registros: parcial.detalhes.length })
-        } else {
-          resultado.arquivosImportados.push({ nome: arquivo.name, tipo: 'Não identificado', registros: 0 })
-        }
-      }
-
-      salvar({
+      const novosDados = {
         ...dados,
         importados: {
           ...dados.importados,
@@ -202,15 +197,15 @@ function OX360Financeiro() {
         },
         detalhesImportados: resultado.detalhesImportados,
         arquivosImportados: resultado.arquivosImportados
-      })
+      }
 
-      toast.success('Planilhas importadas e valores preenchidos automaticamente.')
+      salvar(novosDados)
+      toast.success('Planilhas importadas e valores atualizados com sucesso.')
     } catch (error) {
       console.error(error)
-      toast.error('Erro ao importar planilhas. Verifique o formato dos arquivos.')
+      toast.error('Erro ao importar as planilhas. Verifique os arquivos enviados.')
     } finally {
       setImportando(false)
-      event.target.value = ''
     }
   }
 
@@ -225,7 +220,12 @@ function OX360Financeiro() {
       margemLiquida: resumo.margem,
       saldoAcumulado: resumo.saldoAcumulado,
       dados,
-      resumo
+      resumo,
+      graficos: {
+        financeiro: dadosGraficoFinanceiro,
+        historico: dadosGraficoHistorico,
+        composicao: dadosGraficoComposicao
+      }
     }
   }
 
@@ -261,7 +261,16 @@ function OX360Financeiro() {
 
   return (
     <main className="min-h-screen bg-[#020817] text-white p-8 overflow-y-auto">
-      <div className="mb-8 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".xlsx,.xls,.csv"
+        onChange={importarPlanilhas}
+        className="hidden"
+      />
+
+      <div className="mb-8 flex items-start justify-between gap-5">
         <div>
           <p className="text-blue-400 font-semibold">Diretoria</p>
           <h1 className="text-4xl font-bold mt-2">OX360 Financeiro</h1>
@@ -270,7 +279,15 @@ function OX360Financeiro() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 xl:items-center">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => inputRef.current?.click()}
+            disabled={importando}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 transition rounded-2xl px-6 py-4 font-bold shadow-lg shadow-blue-500/20"
+          >
+            {importando ? 'Importando...' : 'Importar Planilhas OX360'}
+          </button>
+
           <input
             value={dados.mesReferencia}
             onChange={(e) => atualizarCampo('mesReferencia', e.target.value)}
@@ -284,35 +301,19 @@ function OX360Financeiro() {
             className="w-32 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 outline-none focus:border-blue-500"
             placeholder="% área"
           />
-
-          <button
-            onClick={() => inputArquivosRef.current?.click()}
-            disabled={importando}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 transition rounded-2xl px-6 py-4 font-bold shadow-lg shadow-blue-500/20 whitespace-nowrap"
-          >
-            {importando ? 'Importando...' : 'Importar Planilhas'}
-          </button>
         </div>
       </div>
 
-      <input
-        ref={inputArquivosRef}
-        type="file"
-        multiple
-        accept=".xlsx,.xls,.csv"
-        className="hidden"
-        onChange={processarArquivos}
-      />
-
-      {dados.arquivosImportados?.length > 0 && (
+      {Object.keys(dados.arquivosImportados || {}).length > 0 && (
         <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
           <h2 className="text-xl font-bold mb-4">Arquivos Importados</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {dados.arquivosImportados.map((arquivo, index) => (
-              <div key={`${arquivo.nome}-${index}`} className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
-                <p className="font-bold truncate">{arquivo.tipo}</p>
-                <p className="text-sm text-slate-400 truncate mt-1">{arquivo.nome}</p>
-                <p className="text-xs text-blue-300 mt-2">{arquivo.registros} registro(s) lido(s)</p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(dados.arquivosImportados).map(([tipo, info]) => (
+              <div key={tipo} className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
+                <p className="font-bold capitalize">{tipo}</p>
+                <p className="text-sm text-blue-200 mt-2">{info.nome}</p>
+                <p className="text-xs text-blue-400 mt-3">{info.registros} registro(s) lido(s)</p>
               </div>
             ))}
           </div>
@@ -375,9 +376,9 @@ function OX360Financeiro() {
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-        <GraficoReceitasDespesas dados={dadosGraficos.receitasDespesas} />
-        <GraficoConsumoComparativo dados={dadosGraficos.consumoComparativo} />
-        <GraficoComposicaoDespesas dados={dadosGraficos.composicaoDespesas} />
+        <GraficoFinanceiro dados={dadosGraficoFinanceiro} />
+        <GraficoHistorico dados={dadosGraficoHistorico} />
+        <GraficoComposicao dados={dadosGraficoComposicao} />
       </section>
 
       <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
@@ -404,29 +405,36 @@ function OX360Financeiro() {
         <TabelaResumo dados={dados} resumo={resumo} />
       </section>
 
-      <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
-        <h2 className="text-xl font-bold mb-4">Exportações</h2>
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
+          <h2 className="text-xl font-bold mb-4">Exportações</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <button
-            onClick={exportarPlanilhaCompleta}
-            className="w-full bg-slate-800 hover:bg-slate-700 transition rounded-xl p-4 font-bold"
-          >
-            Exportar Planilha Completa
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={exportarPlanilhaCompleta}
+              className="w-full bg-slate-800 hover:bg-slate-700 transition rounded-xl p-4 font-bold"
+            >
+              Exportar Planilha Completa
+            </button>
 
-          <button
-            onClick={() => gerarPDFRelatorio(montarRelatorio())}
-            className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
-          >
-            Gerar PDF Completo
-          </button>
+            <button
+              onClick={() => gerarPDFRelatorio(montarRelatorio())}
+              className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
+            >
+              Gerar PDF Completo
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
+          <h2 className="text-xl font-bold mb-4">Detalhes Importados</h2>
+          <p className="text-slate-400 text-sm">
+            Os registros detalhados das planilhas são armazenados no relatório PDF e na planilha Excel completa.
+          </p>
         </div>
       </section>
 
-      <DetalhesImportados detalhes={dados.detalhesImportados} />
-
-      <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mt-8">
+      <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
         <h2 className="text-xl font-bold mb-4">Histórico de Relatórios Gerados</h2>
 
         {dados.historico.length === 0 ? (
@@ -477,143 +485,9 @@ function OX360Financeiro() {
   )
 }
 
-function montarDadosGraficos(dados, resumo) {
-  const historicoAtual = Array.isArray(dados.historico) ? dados.historico : []
-  const ultimoRelatorio = historicoAtual[0]
-
-  const despesasFixas = Number(resumo.saidasFixasRateadas || 0)
-  const despesasManuais = somaObjeto(dados.manuais)
-  const estoque = Number(dados.importados?.estoqueMateriais || 0)
-  const assessoria = Number(dados.importados?.assessoriaTecnica || 0)
-
-  const consumoAtual = estoque + assessoria + despesasManuais
-  const consumoAnterior = ultimoRelatorio
-    ? Number(ultimoRelatorio.despesaTotal || 0)
-    : 0
-
-  return {
-    receitasDespesas: [
-      {
-        nome: dados.mesReferencia || 'Mês atual',
-        Receitas: Number(resumo.entradas || 0),
-        Despesas: Number(resumo.saidas || 0),
-        Lucro: Number(resumo.lucro || 0)
-      }
-    ],
-    consumoComparativo: [
-      {
-        nome: 'Mês anterior',
-        Consumo: consumoAnterior
-      },
-      {
-        nome: 'Mês atual',
-        Consumo: consumoAtual
-      }
-    ],
-    composicaoDespesas: [
-      { name: 'Fixas rateadas', value: despesasFixas },
-      { name: 'Manuais', value: despesasManuais },
-      { name: 'Estoque', value: estoque },
-      { name: 'Assessoria', value: assessoria }
-    ].filter((item) => Number(item.value || 0) > 0)
-  }
-}
-
-function GraficoReceitasDespesas({ dados }) {
-  return (
-    <CardGrafico titulo="Receitas, Despesas e Lucro" subtitulo="Visão financeira consolidada do mês.">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={dados}>
-          <XAxis dataKey="nome" stroke="#94a3b8" fontSize={12} />
-          <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(value) => formatarMoedaCurta(value)} />
-          <Tooltip content={<TooltipFinanceiro />} />
-          <Legend />
-          <Bar dataKey="Receitas" fill="#22c55e" radius={[8, 8, 0, 0]} />
-          <Bar dataKey="Despesas" fill="#ef4444" radius={[8, 8, 0, 0]} />
-          <Bar dataKey="Lucro" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    </CardGrafico>
-  )
-}
-
-function GraficoConsumoComparativo({ dados }) {
-  return (
-    <CardGrafico titulo="Consumo x Mês Anterior" subtitulo="Comparativo com o último relatório gerado.">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={dados}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
-          <XAxis dataKey="nome" stroke="#94a3b8" fontSize={12} />
-          <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(value) => formatarMoedaCurta(value)} />
-          <Tooltip content={<TooltipFinanceiro />} />
-          <Line type="monotone" dataKey="Consumo" stroke="#f59e0b" strokeWidth={4} dot={{ r: 6 }} />
-        </LineChart>
-      </ResponsiveContainer>
-    </CardGrafico>
-  )
-}
-
-function GraficoComposicaoDespesas({ dados }) {
-  const CORES = ['#3b82f6', '#ef4444', '#f59e0b', '#22c55e', '#a855f7']
-
-  return (
-    <CardGrafico titulo="Composição das Despesas" subtitulo="Distribuição das saídas por origem.">
-      {dados.length === 0 ? (
-        <div className="h-full flex items-center justify-center text-slate-500 text-sm">
-          Aguardando valores para montar o gráfico.
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={dados}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={45}
-              outerRadius={85}
-              paddingAngle={4}
-            >
-              {dados.map((_, index) => (
-                <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
-              ))}
-            </Pie>
-            <Tooltip content={<TooltipFinanceiro />} />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
-      )}
-    </CardGrafico>
-  )
-}
-
-function CardGrafico({ titulo, subtitulo, children }) {
-  return (
-    <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 min-h-[360px]">
-      <h2 className="text-xl font-bold">{titulo}</h2>
-      <p className="text-sm text-slate-500 mt-1 mb-5">{subtitulo}</p>
-      <div className="h-64">{children}</div>
-    </div>
-  )
-}
-
-function TooltipFinanceiro({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-
-  return (
-    <div className="bg-[#020817] border border-blue-500/20 rounded-2xl p-3 shadow-xl">
-      {label && <p className="font-bold text-white mb-2">{label}</p>}
-      {payload.map((item) => (
-        <p key={item.name} className="text-sm" style={{ color: item.color }}>
-          {item.name}: {moeda(item.value)}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 function calcularResumo(dados) {
   const fixosTotal = somaObjeto(dados.fixos)
-  const manuaisTotal = somaObjeto(dados.manuais)
+  const manuaisTotal = somaCampos(dados.manuais, CAMPOS_MANUAIS.filter((c) => c.key !== 'saldoAnterior'))
 
   const entradas =
     Number(dados.importados?.faturamentoParticular || 0) +
@@ -621,12 +495,12 @@ function calcularResumo(dados) {
 
   const saidasFixasRateadas = fixosTotal * (Number(dados.razaoArea || 0) / 100)
 
-  const saidas =
-    saidasFixasRateadas +
-    manuaisTotal +
-    Number(dados.importados?.estoqueMateriais || 0) +
+  const saidasImportadas =
+    Number(dados.importados?.materialLimpeza || 0) +
+    Number(dados.importados?.almoxarifado || 0) +
     Number(dados.importados?.assessoriaTecnica || 0)
 
+  const saidas = saidasFixasRateadas + manuaisTotal + saidasImportadas
   const lucro = entradas - saidas
   const saldoAcumulado = lucro + Number(dados.manuais?.saldoAnterior || 0)
   const margem = entradas > 0 ? (lucro / entradas) * 100 : 0
@@ -638,18 +512,76 @@ function calcularResumo(dados) {
     saldoAcumulado,
     margem,
     fixosTotal,
+    manuaisTotal,
+    saidasImportadas,
     saidasFixasRateadas
   }
 }
 
-function lerArquivoExcel(arquivo) {
+async function processarArquivosImportados(arquivos, mesReferencia) {
+  const importados = {
+    faturamentoParticular: 0,
+    faturamentoConvenio: 0,
+    materialLimpeza: 0,
+    almoxarifado: 0,
+    assessoriaTecnica: 0
+  }
+
+  const detalhesImportados = {
+    faturamento: [],
+    estoque: [],
+    assessoria: []
+  }
+
+  const arquivosImportados = {}
+
+  for (const arquivo of arquivos) {
+    const workbook = await lerWorkbook(arquivo)
+    const tipo = classificarArquivo(arquivo.name)
+
+    if (tipo === 'faturamento') {
+      const resultado = processarFaturamento(workbook, mesReferencia)
+      importados.faturamentoParticular += resultado.particular
+      importados.faturamentoConvenio += resultado.convenio
+      detalhesImportados.faturamento.push(...resultado.detalhes)
+      arquivosImportados.faturamento = {
+        nome: arquivo.name,
+        registros: resultado.detalhes.length
+      }
+    } else if (tipo === 'estoque') {
+      const resultado = processarEstoque(workbook)
+      importados.materialLimpeza += resultado.materialLimpeza
+      importados.almoxarifado += resultado.almoxarifado
+      detalhesImportados.estoque.push(...resultado.detalhes)
+      arquivosImportados.estoque = {
+        nome: arquivo.name,
+        registros: resultado.detalhes.length
+      }
+    } else {
+      const resultado = processarAssessoria(workbook)
+      importados.assessoriaTecnica += resultado.valor
+      detalhesImportados.assessoria.push(...resultado.detalhes)
+      arquivosImportados.assessoria = {
+        nome: arquivo.name,
+        registros: resultado.detalhes.length
+      }
+    }
+  }
+
+  return {
+    importados,
+    detalhesImportados,
+    arquivosImportados
+  }
+}
+
+function lerWorkbook(arquivo) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (event) => {
       try {
         const data = new Uint8Array(event.target.result)
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true })
-        resolve(workbook)
+        resolve(XLSX.read(data, { type: 'array', cellDates: true }))
       } catch (error) {
         reject(error)
       }
@@ -659,287 +591,411 @@ function lerArquivoExcel(arquivo) {
   })
 }
 
-function identificarTipoArquivo(nome, workbook) {
-  const nomeNormalizado = normalizarTexto(nome)
-  const sheets = workbook.SheetNames.map(normalizarTexto).join(' ')
-  const combinado = `${nomeNormalizado} ${sheets}`
+function classificarArquivo(nome) {
+  const normalizado = normalizarTexto(nome)
 
-  if (combinado.includes('FATURAMENTO') || combinado.includes('PART') || combinado.includes('CONV') || combinado.includes('BRADE')) {
+  if (normalizado.includes('FATURAMENTO') || normalizado.includes('PART') || normalizado.includes('CONV')) {
     return 'faturamento'
   }
 
-  if (combinado.includes('BIOMOL E LIMPEZA') || combinado.includes('CENTRO CUSTO') || combinado.includes('ESTOQUE')) {
+  if (normalizado.includes('ESTOQUE') || normalizado.includes('LIMPEZA') || normalizado.includes('BIOMOL E LIMPEZA')) {
     return 'estoque'
   }
 
-  if (combinado.includes('ACOMPANHAMENTO') || combinado.includes('QUANTIDADE DE PACIENTES') || combinado.includes('QUANTID DE EXAME')) {
-    return 'assessoria'
-  }
-
-  return 'desconhecido'
+  return 'assessoria'
 }
 
-function extrairFaturamento(workbook, mesReferencia) {
-  const tokensMes = obterTokensMes(mesReferencia)
-  const detalhes = []
+function processarFaturamento(workbook, mesReferencia) {
+  const meses = aliasesMes(mesReferencia)
+  const sheetsDoMes = workbook.SheetNames.filter((name) => {
+    const n = normalizarTexto(name)
+    return meses.some((m) => n.includes(m))
+  })
+
+  const sheets = sheetsDoMes.length > 0 ? sheetsDoMes : workbook.SheetNames
   let particular = 0
   let convenio = 0
-
-  let sheets = workbook.SheetNames.filter((sheet) => {
-    const nome = normalizarTexto(sheet)
-    const ehFaturamento = nome.includes('PART') || nome.includes('PARTICULAR') || nome.includes('CONV') || nome.includes('BRADE') || nome.includes('BRAD')
-    const ehMes = tokensMes.some((token) => nome.includes(token))
-    return ehFaturamento && ehMes
-  })
-
-  if (sheets.length === 0) {
-    sheets = workbook.SheetNames.filter((sheet) => {
-      const nome = normalizarTexto(sheet)
-      return nome.includes('PART') || nome.includes('PARTICULAR') || nome.includes('CONV') || nome.includes('BRADE') || nome.includes('BRAD')
-    })
-  }
+  const detalhes = []
 
   sheets.forEach((sheetName) => {
-    const aoa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: null })
-    const headerIndex = aoa.findIndex((row) => row.some((cell) => normalizarTexto(cell).includes('O.S.')))
-    if (headerIndex < 0) return
+    const ws = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
+    const headers = localizarCabecalho(rows)
+    if (!headers) return
 
-    const headers = aoa[headerIndex].map((h) => normalizarTexto(h))
-    const idx = montarIndiceHeaders(headers)
-    const nomeSheet = normalizarTexto(sheetName)
-    const tipo = nomeSheet.includes('PART') || nomeSheet.includes('PARTICULAR') ? 'Particular' : 'Convênio'
+    const sheetNormal = normalizarTexto(sheetName)
+    const isParticular = sheetNormal.includes('PART') || sheetNormal.includes('PARTICULAR')
+    const isConvenio = sheetNormal.includes('CONV') || sheetNormal.includes('BRADE') || sheetNormal.includes('BRAD')
 
-    aoa.slice(headerIndex + 1).forEach((row) => {
-      const os = row[idx.os]
-      if (!os) return
+    const valorIndex = isParticular
+      ? localizarColuna(headers.header, ['VL. BLC LÍQUIDO', 'VL BLC LIQUIDO', 'LIQUIDO'])
+      : localizarColuna(headers.header, ['VL FAT', 'VL. FAT', 'VALOR FAT'])
 
-      const valor = tipo === 'Particular'
-        ? numero(row[idx.liquido] ?? row[idx.valorBruto])
-        : numero(row[idx.valorFaturado] ?? row[idx.valorPago] ?? row[idx.liquido])
+    const procedimentoIndex = localizarColuna(headers.header, ['PROCEDIMENTO'])
+    const dataIndex = localizarColuna(headers.header, ['DATA'])
+    const fonteIndex = localizarColuna(headers.header, ['FONTE PAG'])
+    const mnemonicoIndex = localizarColuna(headers.header, ['MNEMÔNICO', 'MNEMONICO'])
 
-      if (!valor) return
+    if (valorIndex < 0) return
 
-      if (tipo === 'Particular') particular += valor
-      else convenio += valor
+    rows.slice(headers.index + 1).forEach((row) => {
+      const valorBruto = converterNumero(row[valorIndex])
+      if (!valorBruto) return
+
+      const valorRateado = valorBruto * 0.5
+
+      if (isParticular) particular += valorRateado
+      if (isConvenio) convenio += valorRateado
 
       detalhes.push({
-        Tipo: tipo,
-        Planilha: sheetName,
-        Data: formatarDataExcel(row[idx.data]),
-        OS: os,
-        Fonte: row[idx.fonte] || '',
-        Mnemônico: row[idx.mnemonico] || '',
-        Procedimento: row[idx.procedimento] || '',
-        Valor: valor,
-        Desconto: numero(row[idx.desconto]),
-        Imposto: numero(row[idx.imposto]),
-        Glosado: numero(row[idx.glosado])
+        origem: isParticular ? 'Particular' : isConvenio ? 'Convênio' : 'Faturamento',
+        planilha: sheetName,
+        data: formatarDataCelula(row[dataIndex]),
+        fonte: row[fonteIndex] || '',
+        mnemonico: row[mnemonicoIndex] || '',
+        descricao: row[procedimentoIndex] || '',
+        valorOriginal: valorBruto,
+        valorConsiderado: valorRateado
       })
     })
   })
 
   return {
-    particular: arredondar(particular),
-    convenio: arredondar(convenio),
+    particular,
+    convenio,
     detalhes
   }
 }
 
-function extrairEstoque(workbook) {
+function processarEstoque(workbook) {
+  let materialLimpeza = 0
+  let almoxarifado = 0
   const detalhes = []
-  let totalResumo = 0
 
   workbook.SheetNames.forEach((sheetName) => {
-    const aoa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: null })
-    const headerIndex = aoa.findIndex((row) => normalizarTexto(row.join(' ')).includes('CENTRO CUSTO') && normalizarTexto(row.join(' ')).includes('TOTAL MOVIMENTO'))
-    if (headerIndex < 0) return
+    const ws = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
+    const headers = localizarCabecalho(rows)
+    if (!headers) return
 
-    const headers = aoa[headerIndex].map((h) => normalizarTexto(h))
-    const idx = montarIndiceEstoque(headers)
+    const descIndex = localizarColuna(headers.header, ['DESCRIÇÃO ITEM', 'DESCRICAO ITEM', 'DESCRIÇÃO', 'DESCRICAO'])
+    const totalIndex = localizarColuna(headers.header, ['TOTAL MOVIMENTO', 'TOTAL', 'VALOR'])
+    const processoIndex = localizarColuna(headers.header, ['PROCESSO'])
+    const quantidadeIndex = localizarColuna(headers.header, ['QTDE', 'QUANTIDADE'])
+    const dataIndex = localizarColuna(headers.header, ['DATA MOVIMENTO', 'DATA'])
 
-    aoa.slice(headerIndex + 1).forEach((row) => {
-      const descricao = row[idx.descricao]
-      const total = numero(row[idx.total])
-      const linhaTexto = normalizarTexto(row.join(' '))
+    if (descIndex < 0 || totalIndex < 0) return
 
-      if (linhaTexto.includes('RESUMO DAS MOVIMENTACOES')) return
-      if (linhaTexto.includes('ESPECIFICACAO') && linhaTexto.includes('VALOR TOTAL')) return
+    rows.slice(headers.index + 1).forEach((row) => {
+      const descricao = row[descIndex]
+      const valor = converterNumero(row[totalIndex])
 
-      if (linhaTexto.startsWith('S ') || row[0] === 'S') {
-        const valorResumo = numero(row[3]) || numero(row[8])
-        if (valorResumo) totalResumo += valorResumo
-        return
-      }
+      if (!descricao || !valor) return
 
-      if (!descricao || !total) return
+      const descNormal = normalizarTexto(descricao)
+      const isLimpeza = LIMPEZA_KEYWORDS.some((palavra) => descNormal.includes(normalizarTexto(palavra)))
+
+      if (isLimpeza) materialLimpeza += valor
+      else almoxarifado += valor
 
       detalhes.push({
-        Planilha: sheetName,
-        CentroCusto: row[idx.centroCusto] || '',
-        Processo: row[idx.processo] || '',
-        Codigo: row[idx.codigo] || '',
-        Descricao: descricao,
-        Data: formatarDataExcel(row[idx.data]),
-        Tipo: row[idx.tipo] || '',
-        Requisitante: row[idx.requisitante] || '',
-        Quantidade: numero(row[idx.quantidade]),
-        Total: total
+        origem: isLimpeza ? 'Material Limpeza' : 'Almoxarifado',
+        planilha: sheetName,
+        data: formatarDataCelula(row[dataIndex]),
+        processo: row[processoIndex] || '',
+        descricao,
+        quantidade: row[quantidadeIndex] || '',
+        valor
       })
     })
   })
 
-  const totalDetalhes = detalhes.reduce((acc, item) => acc + Number(item.Total || 0), 0)
-
   return {
-    total: arredondar(totalResumo || totalDetalhes),
+    materialLimpeza,
+    almoxarifado,
     detalhes
   }
 }
 
-function extrairAssessoria(workbook, mesReferencia) {
+function processarAssessoria(workbook) {
   const detalhes = []
-  const tokensMes = obterTokensMes(mesReferencia)
+  let valor = 0
 
   workbook.SheetNames.forEach((sheetName) => {
-    const aoa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: null })
-    const nomeSheet = normalizarTexto(sheetName)
+    const ws = workbook.Sheets[sheetName]
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null })
 
-    if (nomeSheet.includes('QUANTIDADE DE PACIENTES')) {
-      const linhaMeses = aoa.find((row) => row.some((cell) => tokensMes.some((token) => normalizarTexto(cell).includes(token))))
-      const linhaValoresIndex = aoa.findIndex((row) => row === linhaMeses) + 1
-      const linhaValores = aoa[linhaValoresIndex] || []
+    rows.forEach((row, index) => {
+      const preenchidos = row.filter((cell) => cell !== null && cell !== undefined && cell !== '')
+      if (preenchidos.length === 0) return
 
-      if (linhaMeses) {
-        linhaMeses.forEach((mes, index) => {
-          const mesNorm = normalizarTexto(mes)
-          if (tokensMes.some((token) => mesNorm.includes(token))) {
-            detalhes.push({
-              Origem: 'Pacientes por mês',
-              Planilha: sheetName,
-              Indicador: `Quantidade de pacientes - ${mes}`,
-              Valor: numero(linhaValores[index])
-            })
-          }
+      const textoLinha = preenchidos.join(' | ')
+      const nums = preenchidos.filter((cell) => typeof cell === 'number')
+      const somaLinha = nums.reduce((acc, n) => acc + Number(n || 0), 0)
+
+      if (normalizarTexto(textoLinha).includes('TOTAL') && somaLinha > 0) {
+        valor += somaLinha
+      }
+
+      if (detalhes.length < 300) {
+        detalhes.push({
+          planilha: sheetName,
+          linha: index + 1,
+          descricao: textoLinha,
+          valor: somaLinha || 0
         })
       }
-    }
-
-    if (nomeSheet.includes('QUANTID DE EXAME') || nomeSheet.includes('EXAME')) {
-      const headerIndex = aoa.findIndex((row) => normalizarTexto(row.join(' ')).includes('EXAMES BIOLOGIA MOLECULAR'))
-      if (headerIndex >= 0) {
-        aoa.slice(headerIndex + 1).forEach((row) => {
-          const exame = row[1]
-          if (!exame) return
-
-          detalhes.push({
-            Origem: 'Quantidade de exames',
-            Planilha: sheetName,
-            Laboratorio: row[0] || '',
-            Exame: exame,
-            Shift: numero(row[2]),
-            Salus: numero(row[3]),
-            Total: numero(row[4])
-          })
-        })
-      }
-    }
+    })
   })
 
   return {
-    valorFinanceiro: 0,
+    valor,
     detalhes
   }
 }
 
-function montarIndiceHeaders(headers) {
-  return {
-    data: encontrarIndice(headers, ['DATA']),
-    os: encontrarIndice(headers, ['O.S', 'OS']),
-    fonte: encontrarIndice(headers, ['FONTE']),
-    mnemonico: encontrarIndice(headers, ['MNEMONICO', 'MNEMÔNICO']),
-    procedimento: encontrarIndice(headers, ['PROCEDIMENTO']),
-    valorBruto: encontrarIndice(headers, ['VL BLC BRUTO', 'BRUTO']),
-    desconto: encontrarIndice(headers, ['DESCONTO']),
-    imposto: encontrarIndice(headers, ['IMPOSTO']),
-    liquido: encontrarIndice(headers, ['LIQUIDO', 'LÍQUIDO']),
-    valorFaturado: encontrarIndice(headers, ['VL FAT', 'VALOR FAT']),
-    valorPago: encontrarIndice(headers, ['VL PAGO', 'PAGO']),
-    glosado: encontrarIndice(headers, ['GLOSADO', 'GLOSA'])
+function localizarCabecalho(rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const normalizado = rows[i].map((cell) => normalizarTexto(cell))
+    const temDescricao = normalizado.some((cell) => cell.includes('DESCR') || cell.includes('PROCEDIMENTO'))
+    const temValor = normalizado.some((cell) => cell.includes('VALOR') || cell.includes('VL') || cell.includes('TOTAL'))
+
+    if (temDescricao && temValor) {
+      return {
+        index: i,
+        header: rows[i]
+      }
+    }
   }
+
+  return null
 }
 
-function montarIndiceEstoque(headers) {
-  return {
-    centroCusto: encontrarIndice(headers, ['CENTRO CUSTO']),
-    processo: encontrarIndice(headers, ['PROCESSO']),
-    codigo: encontrarIndice(headers, ['CODIGO ITEM', 'CÓDIGO ITEM']),
-    descricao: encontrarIndice(headers, ['DESCRICAO ITEM', 'DESCRIÇÃO ITEM']),
-    data: encontrarIndice(headers, ['DATA MOVIMENTO']),
-    tipo: encontrarIndice(headers, ['TIPO']),
-    requisitante: encontrarIndice(headers, ['REQUISITANTE']),
-    quantidade: encontrarIndice(headers, ['QTDE', 'QUANTIDADE']),
-    total: encontrarIndice(headers, ['TOTAL MOVIMENTO'])
-  }
+function localizarColuna(header, possibilidades) {
+  const normalizado = header.map((cell) => normalizarTexto(cell))
+
+  return normalizado.findIndex((cell) =>
+    possibilidades.some((possibilidade) => cell.includes(normalizarTexto(possibilidade)))
+  )
 }
 
-function encontrarIndice(headers, termos) {
-  return headers.findIndex((header) => termos.some((termo) => header.includes(normalizarTexto(termo))))
+function criarDadosGraficoFinanceiro(dados, resumo) {
+  return [
+    {
+      mes: dados.mesReferencia,
+      Receitas: arredondar(resumo.entradas),
+      Despesas: arredondar(resumo.saidas),
+      Lucro: arredondar(resumo.lucro)
+    }
+  ]
+}
+
+function criarDadosGraficoHistorico(dados, resumo) {
+  const historico = [...(dados.historico || [])]
+    .slice(0, 5)
+    .reverse()
+    .map((item) => ({
+      mes: item.mesReferencia,
+      Consumo: arredondar(item.despesaTotal || 0),
+      Lucro: arredondar(item.lucroLiquido || 0)
+    }))
+
+  historico.push({
+    mes: dados.mesReferencia,
+    Consumo: arredondar(resumo.saidas),
+    Lucro: arredondar(resumo.lucro)
+  })
+
+  return historico.slice(-6)
+}
+
+function criarDadosGraficoComposicao(dados, resumo) {
+  return [
+    { name: 'Fixas rateadas', value: arredondar(resumo.saidasFixasRateadas), color: CORES_GRAFICO.azul },
+    { name: 'Manuais', value: arredondar(resumo.manuaisTotal), color: CORES_GRAFICO.vermelho },
+    { name: 'Material Limpeza', value: arredondar(dados.importados?.materialLimpeza || 0), color: CORES_GRAFICO.verde },
+    { name: 'Almoxarifado', value: arredondar(dados.importados?.almoxarifado || 0), color: CORES_GRAFICO.amarelo },
+    { name: 'Assessoria Técnica', value: arredondar(dados.importados?.assessoriaTecnica || 0), color: CORES_GRAFICO.roxo }
+  ].filter((item) => item.value > 0)
+}
+
+function GraficoFinanceiro({ dados }) {
+  return (
+    <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
+      <h2 className="text-xl font-bold">Receitas, Despesas e Lucro</h2>
+      <p className="text-slate-500 text-sm mt-1 mb-5">Visão financeira consolidada do mês.</p>
+
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={dados}>
+            <XAxis dataKey="mes" stroke="#93c5fd" fontSize={12} />
+            <YAxis stroke="#93c5fd" fontSize={12} tickFormatter={(v) => moedaCompacta(v)} />
+            <Tooltip content={<TooltipFinanceiro />} />
+            <Legend />
+            <Bar dataKey="Receitas" fill={CORES_GRAFICO.verde} radius={[8, 8, 0, 0]} />
+            <Bar dataKey="Despesas" fill={CORES_GRAFICO.vermelho} radius={[8, 8, 0, 0]} />
+            <Bar dataKey="Lucro" fill={CORES_GRAFICO.azul} radius={[8, 8, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+function GraficoHistorico({ dados }) {
+  return (
+    <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
+      <h2 className="text-xl font-bold">Consumo x Últimos 6 Meses</h2>
+      <p className="text-slate-500 text-sm mt-1 mb-5">Baseado no histórico de relatórios gerados.</p>
+
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={dados}>
+            <XAxis dataKey="mes" stroke="#93c5fd" fontSize={11} />
+            <YAxis stroke="#93c5fd" fontSize={12} tickFormatter={(v) => moedaCompacta(v)} />
+            <Tooltip content={<TooltipFinanceiro />} />
+            <Legend />
+            <Line type="monotone" dataKey="Consumo" stroke={CORES_GRAFICO.amarelo} strokeWidth={3} dot={{ r: 4 }} />
+            <Line type="monotone" dataKey="Lucro" stroke={CORES_GRAFICO.verde} strokeWidth={3} dot={{ r: 4 }} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+function GraficoComposicao({ dados }) {
+  return (
+    <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
+      <h2 className="text-xl font-bold">Composição das Despesas</h2>
+      <p className="text-slate-500 text-sm mt-1 mb-5">Distribuição das saídas por origem.</p>
+
+      <div className="h-72">
+        {dados.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-slate-500">Sem dados de despesa.</div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={dados} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3}>
+                {dados.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip content={<TooltipFinanceiro />} />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TooltipFinanceiro({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+
+  return (
+    <div className="bg-slate-950 border border-blue-500/20 rounded-xl p-3 shadow-xl">
+      {label && <p className="text-blue-300 text-sm font-bold mb-2">{label}</p>}
+      {payload.map((item) => (
+        <p key={item.name} className="text-sm" style={{ color: item.color }}>
+          {item.name}: {moeda(item.value)}
+        </p>
+      ))}
+    </div>
+  )
 }
 
 function gerarExcelRelatorio(relatorio) {
   const wb = XLSX.utils.book_new()
+  const linhas = montarLinhasExcelUnico(relatorio)
+  const ws = XLSX.utils.aoa_to_sheet(linhas)
 
-  const resumo = [
-    ['OX360 FINANCEIRO'],
-    ['Relatório Executivo CDL'],
+  ws['!cols'] = [
+    { wch: 42 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 18 },
+    { wch: 36 }
+  ]
+
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }
+  ]
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Relatório OX360')
+  XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
+}
+
+function montarLinhasExcelUnico(relatorio) {
+  const linhas = [
+    ['OX360 FINANCEIRO - RELATÓRIO EXECUTIVO CDL'],
+    ['Painel BI • Gestão de Indicadores'],
     [],
-    ['Mês Referência', relatorio.mesReferencia],
-    ['Gerado em', relatorio.data],
+    ['Mês Referência', relatorio.mesReferencia, '', 'Gerado em', relatorio.data],
     [],
+    ['RESUMO EXECUTIVO'],
     ['Indicador', 'Valor'],
     ['Receita Total', relatorio.receitaTotal],
     ['Despesa Total', relatorio.despesaTotal],
     ['Lucro Líquido', relatorio.lucroLiquido],
     ['Margem Líquida', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`],
-    ['Saldo Acumulado', relatorio.saldoAcumulado]
+    ['Saldo Acumulado', relatorio.saldoAcumulado],
+    [],
+    ['DADOS DOS GRÁFICOS'],
+    ['Mês', 'Receitas', 'Despesas', 'Lucro'],
+    ...relatorio.graficos.financeiro.map((item) => [item.mes, item.Receitas, item.Despesas, item.Lucro]),
+    [],
+    ['Histórico 6 meses', 'Consumo', 'Lucro'],
+    ...relatorio.graficos.historico.map((item) => [item.mes, item.Consumo, item.Lucro]),
+    [],
+    ['Composição das Despesas', 'Valor'],
+    ...relatorio.graficos.composicao.map((item) => [item.name, item.value]),
+    [],
+    ['RESUMO CONSOLIDADO'],
+    ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
+    ...montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).map((linha) => linha.slice(0, 6)),
+    [],
+    ['DETALHE FATURAMENTO'],
+    ['Origem', 'Planilha', 'Data', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Original', 'Valor Considerado'],
+    ...limitarDetalhes(relatorio.dados.detalhesImportados?.faturamento).map((item) => [
+      item.origem,
+      item.planilha,
+      item.data,
+      item.fonte,
+      item.mnemonico,
+      item.descricao,
+      item.valorOriginal,
+      item.valorConsiderado
+    ]),
+    [],
+    ['DETALHE ESTOQUE / MATERIAIS'],
+    ['Origem', 'Planilha', 'Data', 'Processo', 'Descrição', 'Quantidade', 'Valor'],
+    ...limitarDetalhes(relatorio.dados.detalhesImportados?.estoque).map((item) => [
+      item.origem,
+      item.planilha,
+      item.data,
+      item.processo,
+      item.descricao,
+      item.quantidade,
+      item.valor
+    ]),
+    [],
+    ['DETALHE ASSESSORIA TÉCNICA'],
+    ['Planilha', 'Linha', 'Descrição', 'Valor'],
+    ...limitarDetalhes(relatorio.dados.detalhesImportados?.assessoria).map((item) => [
+      item.planilha,
+      item.linha,
+      item.descricao,
+      item.valor
+    ])
   ]
 
-  const wsResumo = XLSX.utils.aoa_to_sheet(resumo)
-  wsResumo['!cols'] = [{ wch: 30 }, { wch: 24 }]
-  XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Executivo')
-
-  adicionarAba(wb, 'Valores Fixos', CAMPOS_FIXOS, relatorio.dados.fixos)
-  adicionarAba(wb, 'Valores Manuais', CAMPOS_MANUAIS, relatorio.dados.manuais)
-  adicionarAba(wb, 'Valores Importados', CAMPOS_IMPORTADOS, relatorio.dados.importados)
-
-  const consolidado = montarLinhasConsolidadas(relatorio.dados, relatorio.resumo)
-  const wsConsolidado = XLSX.utils.aoa_to_sheet([
-    ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
-    ...consolidado.map((linha) => linha.slice(0, 6))
-  ])
-  wsConsolidado['!cols'] = [{ wch: 38 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 18 }]
-  XLSX.utils.book_append_sheet(wb, wsConsolidado, 'Consolidado')
-
-  adicionarAbaDetalhes(wb, 'Detalhe Faturamento', relatorio.dados.detalhesImportados?.faturamento || [])
-  adicionarAbaDetalhes(wb, 'Detalhe Estoque', relatorio.dados.detalhesImportados?.estoque || [])
-  adicionarAbaDetalhes(wb, 'Detalhe Assessoria', relatorio.dados.detalhesImportados?.assessoria || [])
-  adicionarAbaDetalhes(wb, 'Arquivos Importados', relatorio.dados.arquivosImportados || [])
-
-  XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
-}
-
-function adicionarAba(wb, nomeAba, campos, valores = {}) {
-  const linhas = [['Descrição', 'Valor'], ...campos.map((campo) => [campo.nome, valores?.[campo.key] || 0])]
-  const ws = XLSX.utils.aoa_to_sheet(linhas)
-  ws['!cols'] = [{ wch: 38 }, { wch: 18 }]
-  XLSX.utils.book_append_sheet(wb, ws, nomeAba)
-}
-
-function adicionarAbaDetalhes(wb, nomeAba, linhas = []) {
-  const dados = linhas.length ? linhas : [{ Aviso: 'Nenhum dado importado para este grupo.' }]
-  const ws = XLSX.utils.json_to_sheet(dados)
-  ws['!cols'] = Object.keys(dados[0] || {}).map(() => ({ wch: 24 }))
-  XLSX.utils.book_append_sheet(wb, ws, nomeAba)
+  return linhas
 }
 
 async function gerarPDFRelatorio(relatorio) {
@@ -947,7 +1003,6 @@ async function gerarPDFRelatorio(relatorio) {
     const doc = new jsPDF('p', 'mm', 'a4')
     const dados = relatorio.dados
     const resumo = relatorio.resumo
-
     const painelLogo = await carregarImagem(LOGO_PAINEL_BI_URL)
     const cdlLogo = await carregarImagem(LOGO_CDL_URL)
 
@@ -955,10 +1010,9 @@ async function gerarPDFRelatorio(relatorio) {
     desenharCabecalhoPDF(doc, painelLogo, cdlLogo)
     desenharTituloPDF(doc, relatorio)
     desenharCardsPDF(doc, relatorio)
-    let y = desenharTabelaPDF(doc, dados, resumo)
-    y = desenharDetalhesPDF(doc, 'Detalhamento do Faturamento', dados.detalhesImportados?.faturamento || [], ['Tipo', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Valor'], y + 8)
-    y = desenharDetalhesPDF(doc, 'Detalhamento de Materiais / Estoque', dados.detalhesImportados?.estoque || [], ['CentroCusto', 'Processo', 'Descricao', 'Quantidade', 'Total'], y + 8)
-    desenharDetalhesPDF(doc, 'Detalhamento da Assessoria Técnica', dados.detalhesImportados?.assessoria || [], ['Origem', 'Indicador', 'Exame', 'Shift', 'Salus', 'Total'], y + 8)
+    desenharGraficosPDF(doc, relatorio)
+    desenharTabelaPDF(doc, dados, resumo, 170)
+    desenharSecaoDetalhesPDF(doc, relatorio)
     desenharRodapePDF(doc, relatorio)
 
     doc.save(`OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`)
@@ -975,91 +1029,169 @@ function configurarPaginaPDF(doc) {
 
 function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
   if (painelLogo) {
-    doc.addImage(painelLogo, 'PNG', 14, 10, 58, 24)
+    doc.addImage(painelLogo, 'PNG', 12, 11, 72, 28)
   } else {
     doc.setFillColor(37, 99, 235)
-    doc.roundedRect(14, 10, 16, 16, 4, 4, 'F')
+    doc.roundedRect(14, 11, 16, 16, 4, 4, 'F')
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(7)
-    doc.text('BI', 19, 20)
+    doc.text('BI', 20, 21)
     doc.setTextColor(15, 23, 42)
-    doc.setFontSize(13)
-    doc.text('Painel BI', 34, 18)
+    doc.setFontSize(14)
+    doc.text('Painel BI', 35, 18)
     doc.setTextColor(71, 85, 105)
     doc.setFontSize(8)
-    doc.text('Gestão de Indicadores', 34, 25)
+    doc.text('Gestão de Indicadores', 35, 25)
   }
 
   if (cdlLogo) {
-    doc.addImage(cdlLogo, 'PNG', 158, 9, 38, 24)
+    doc.addImage(cdlLogo, 'PNG', 150, 10, 45, 25)
   } else {
     doc.setTextColor(37, 99, 235)
     doc.setFontSize(20)
-    doc.text('CDL', 170, 18)
+    doc.text('CDL', 170, 20)
     doc.setTextColor(71, 85, 105)
     doc.setFontSize(7)
-    doc.text('Laboratório Santos e Vidal', 160, 25)
+    doc.text('Laboratório Santos e Vidal', 154, 27)
   }
 
   doc.setDrawColor(37, 99, 235)
   doc.setLineWidth(0.6)
-  doc.line(14, 38, 196, 38)
+  doc.line(14, 44, 196, 44)
 }
 
 function desenharTituloPDF(doc, relatorio) {
   doc.setTextColor(37, 99, 235)
-  doc.setFontSize(9)
-  doc.text('DIRETORIA', 14, 51)
+  doc.setFontSize(10)
+  doc.text('DIRETORIA', 14, 58)
 
   doc.setTextColor(15, 23, 42)
-  doc.setFontSize(24)
-  doc.text('OX360 FINANCEIRO', 14, 63)
+  doc.setFontSize(25)
+  doc.text('OX360 FINANCEIRO', 14, 72)
 
   doc.setTextColor(71, 85, 105)
-  doc.setFontSize(9)
-  doc.text(`Mês referência: ${relatorio.mesReferencia}`, 14, 74)
+  doc.setFontSize(10)
+  doc.text(`Mês referência: ${relatorio.mesReferencia}`, 14, 84)
 }
 
 function desenharCardsPDF(doc, relatorio) {
   const cards = [
-    { titulo: 'Receita Total', valor: moeda(relatorio.receitaTotal), destaque: true },
-    { titulo: 'Despesa Total', valor: moeda(relatorio.despesaTotal), destaque: false },
-    { titulo: 'Lucro Líquido', valor: moeda(relatorio.lucroLiquido), destaque: true },
-    { titulo: 'Margem', valor: `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`, destaque: false },
-    { titulo: 'Saldo', valor: moeda(relatorio.saldoAcumulado), destaque: false }
+    { titulo: 'Receita Total', valor: moeda(relatorio.receitaTotal), cor: [37, 99, 235] },
+    { titulo: 'Despesa Total', valor: moeda(relatorio.despesaTotal), cor: [220, 38, 38] },
+    { titulo: 'Lucro Líquido', valor: moeda(relatorio.lucroLiquido), cor: [22, 163, 74] },
+    { titulo: 'Margem Líquida', valor: `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`, cor: [124, 58, 237] },
+    { titulo: 'Saldo Acumulado', valor: moeda(relatorio.saldoAcumulado), cor: [37, 99, 235] }
   ]
 
   let x = 14
-  const y = 84
+  const y = 96
 
   cards.forEach((card) => {
-    doc.setFillColor(card.destaque ? 37 : 248, card.destaque ? 99 : 250, card.destaque ? 235 : 252)
+    doc.setFillColor(248, 250, 252)
     doc.setDrawColor(226, 232, 240)
-    doc.roundedRect(x, y, 34, 28, 4, 4, 'FD')
-    doc.setTextColor(card.destaque ? 255 : 71, card.destaque ? 255 : 85, card.destaque ? 255 : 105)
+    doc.roundedRect(x, y, 34, 28, 3, 3, 'FD')
+    doc.setTextColor(...card.cor)
     doc.setFontSize(7)
     doc.text(card.titulo, x + 4, y + 9)
-    doc.setTextColor(card.destaque ? 255 : 15, card.destaque ? 255 : 23, card.destaque ? 255 : 42)
-    doc.setFontSize(10)
-    doc.text(card.valor, x + 4, y + 19)
+    doc.setTextColor(15, 23, 42)
+    doc.setFontSize(9)
+    doc.text(cortarTexto(card.valor, 15), x + 4, y + 19)
     x += 37
   })
 }
 
-function desenharTabelaPDF(doc, dados, resumo) {
+function desenharGraficosPDF(doc, relatorio) {
+  const y = 134
+  desenharBarChartPDF(doc, 14, y, 55, 26, relatorio.graficos.financeiro?.[0])
+  desenharLineChartPDF(doc, 77, y, 55, 26, relatorio.graficos.historico || [])
+  desenharDonutPDF(doc, 150, y + 13, 12, relatorio.graficos.composicao || [])
+
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(8)
+  doc.text('Receitas x Despesas', 14, y - 3)
+  doc.text('Consumo 6 meses', 77, y - 3)
+  doc.text('Composição', 144, y - 3)
+}
+
+function desenharBarChartPDF(doc, x, y, w, h, item = {}) {
+  const valores = [item.Receitas || 0, item.Despesas || 0, item.Lucro || 0]
+  const cores = [[34, 197, 94], [239, 68, 68], [37, 99, 235]]
+  const max = Math.max(...valores.map(Math.abs), 1)
+
+  doc.setDrawColor(226, 232, 240)
+  doc.roundedRect(x, y, w, h, 2, 2)
+
+  valores.forEach((valor, index) => {
+    const bh = Math.max(2, Math.abs(valor) / max * (h - 8))
+    const bx = x + 8 + index * 14
+    const by = y + h - 4 - bh
+    doc.setFillColor(...cores[index])
+    doc.roundedRect(bx, by, 8, bh, 1, 1, 'F')
+  })
+}
+
+function desenharLineChartPDF(doc, x, y, w, h, itens = []) {
+  doc.setDrawColor(226, 232, 240)
+  doc.roundedRect(x, y, w, h, 2, 2)
+
+  if (itens.length < 2) return
+
+  const valores = itens.map((item) => Number(item.Consumo || 0))
+  const max = Math.max(...valores, 1)
+  const min = Math.min(...valores, 0)
+  const range = Math.max(max - min, 1)
+
+  doc.setDrawColor(245, 158, 11)
+  doc.setLineWidth(0.8)
+
+  let anterior = null
+  itens.forEach((item, index) => {
+    const px = x + 4 + (index / Math.max(itens.length - 1, 1)) * (w - 8)
+    const py = y + h - 4 - ((Number(item.Consumo || 0) - min) / range) * (h - 8)
+
+    if (anterior) doc.line(anterior.x, anterior.y, px, py)
+    doc.setFillColor(245, 158, 11)
+    doc.circle(px, py, 1.2, 'F')
+    anterior = { x: px, y: py }
+  })
+}
+
+function desenharDonutPDF(doc, cx, cy, raio, dados = []) {
+  const total = dados.reduce((acc, item) => acc + Number(item.value || 0), 0)
+
+  doc.setDrawColor(226, 232, 240)
+  doc.circle(cx, cy, raio)
+
+  if (!total) return
+
+  let anguloInicio = -90
+  dados.forEach((item) => {
+    const angulo = (Number(item.value || 0) / total) * 360
+    const cor = hexToRgb(item.color)
+    doc.setFillColor(cor[0], cor[1], cor[2])
+    doc.setDrawColor(cor[0], cor[1], cor[2])
+    doc.circle(cx + Math.cos((anguloInicio + angulo / 2) * Math.PI / 180) * 4, cy + Math.sin((anguloInicio + angulo / 2) * Math.PI / 180) * 4, 2.3, 'F')
+    anguloInicio += angulo
+  })
+
+  doc.setFillColor(255, 255, 255)
+  doc.circle(cx, cy, raio * 0.55, 'F')
+}
+
+function desenharTabelaPDF(doc, dados, resumo, startY = 130) {
   doc.setTextColor(15, 23, 42)
   doc.setFontSize(13)
-  doc.text('Resumo consolidado', 14, 124)
+  doc.text('Resumo consolidado', 14, startY - 6)
 
   const colunas = ['Descrição', 'Valor Total', 'Razão', 'Valor Área', 'Saída', 'Entrada']
   const linhas = montarLinhasConsolidadas(dados, resumo)
 
   const x = 14
-  let y = 130
+  let y = startY
   const colWidths = [64, 25, 22, 25, 24, 24]
   const rowHeight = 6
 
-  desenharHeaderTabela(doc, x, y, colunas, colWidths, rowHeight)
+  desenharCabecalhoTabela(doc, x, y, colunas, colWidths, rowHeight)
   y += rowHeight
 
   linhas.forEach((linha, index) => {
@@ -1068,64 +1200,20 @@ function desenharTabelaPDF(doc, dados, resumo) {
       doc.addPage()
       configurarPaginaPDF(doc)
       y = 18
-      desenharHeaderTabela(doc, x, y, colunas, colWidths, rowHeight)
+      desenharCabecalhoTabela(doc, x, y, colunas, colWidths, rowHeight)
       y += rowHeight
     }
 
-    const tipo = linha[6]
-
-    if (tipo === 'secaoAzul' || tipo === 'secaoVermelha' || tipo === 'secaoVerde') {
-      const cor = tipo === 'secaoAzul' ? [239, 246, 255] : tipo === 'secaoVermelha' ? [254, 242, 242] : [240, 253, 244]
-      const textoCor = tipo === 'secaoAzul' ? [37, 99, 235] : tipo === 'secaoVermelha' ? [220, 38, 38] : [22, 163, 74]
-      doc.setFillColor(...cor)
-      doc.setTextColor(...textoCor)
-      doc.setFontSize(7)
-      doc.rect(x, y, 184, rowHeight, 'F')
-      doc.text(linha[0], x + 2, y + 4)
-      y += rowHeight
-      return
-    }
-
-    if (tipo === 'total') {
-      doc.setFillColor(30, 64, 175)
-      doc.setTextColor(255, 255, 255)
-    } else if (tipo === 'lucro') {
-      doc.setFillColor(220, 252, 231)
-      doc.setTextColor(22, 101, 52)
-    } else if (tipo === 'saldo') {
-      doc.setFillColor(239, 246, 255)
-      doc.setTextColor(37, 99, 235)
-    } else if (index % 2 === 0) {
-      doc.setFillColor(255, 255, 255)
-      doc.setTextColor(15, 23, 42)
-    } else {
-      doc.setFillColor(248, 250, 252)
-      doc.setTextColor(15, 23, 42)
-    }
-
-    doc.rect(x, y, 184, rowHeight, 'F')
-    doc.setDrawColor(226, 232, 240)
-    doc.rect(x, y, 184, rowHeight)
-    doc.setFontSize(6.5)
-
-    const textoLinha = [linha[0], valorOuTraco(linha[1]), linha[2] || '-', valorOuTraco(linha[3]), valorOuTraco(linha[4]), valorOuTraco(linha[5])]
-    let colX = x
-    textoLinha.forEach((texto, colIndex) => {
-      doc.text(cortarTexto(String(texto), colIndex === 0 ? 32 : 14), colX + 2, y + 4, { maxWidth: colWidths[colIndex] - 4 })
-      colX += colWidths[colIndex]
-    })
-
-    y += rowHeight
+    y = desenharLinhaTabela(doc, x, y, linha, index, colWidths, rowHeight)
   })
-
-  return y
 }
 
-function desenharHeaderTabela(doc, x, y, colunas, colWidths, rowHeight) {
+function desenharCabecalhoTabela(doc, x, y, colunas, colWidths, rowHeight) {
   doc.setFillColor(37, 99, 235)
   doc.rect(x, y, 184, rowHeight, 'F')
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(7)
+
   let colX = x
   colunas.forEach((col, index) => {
     doc.text(col, colX + 2, y + 4)
@@ -1133,78 +1221,115 @@ function desenharHeaderTabela(doc, x, y, colunas, colWidths, rowHeight) {
   })
 }
 
-function desenharDetalhesPDF(doc, titulo, linhas, colunas, yInicial) {
-  if (!linhas.length) return yInicial
+function desenharLinhaTabela(doc, x, y, linha, index, colWidths, rowHeight) {
+  const tipo = linha[6]
 
-  let y = yInicial
-  const x = 14
-  const rowHeight = 6
-  const tableWidth = 184
-  const colWidth = tableWidth / colunas.length
+  if (tipo === 'secaoAzul' || tipo === 'secaoVermelha' || tipo === 'secaoVerde') {
+    const config = {
+      secaoAzul: { fill: [239, 246, 255], text: [37, 99, 235] },
+      secaoVermelha: { fill: [254, 242, 242], text: [220, 38, 38] },
+      secaoVerde: { fill: [240, 253, 244], text: [22, 163, 74] }
+    }[tipo]
 
-  if (y > 245) {
-    desenharRodapeSimples(doc)
-    doc.addPage()
-    configurarPaginaPDF(doc)
-    y = 18
+    doc.setFillColor(...config.fill)
+    doc.setTextColor(...config.text)
+    doc.setFontSize(7)
+    doc.rect(x, y, 184, rowHeight, 'F')
+    doc.text(linha[0], x + 2, y + 4)
+    return y + rowHeight
   }
 
-  doc.setTextColor(15, 23, 42)
-  doc.setFontSize(12)
-  doc.text(titulo, x, y)
-  y += 6
-
-  doc.setFillColor(37, 99, 235)
-  doc.rect(x, y, tableWidth, rowHeight, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(6)
-  colunas.forEach((coluna, index) => doc.text(cortarTexto(coluna, 18), x + 2 + index * colWidth, y + 4))
-  y += rowHeight
-
-  linhas.forEach((linha, index) => {
-    if (y > 275) {
-      desenharRodapeSimples(doc)
-      doc.addPage()
-      configurarPaginaPDF(doc)
-      y = 18
-      doc.setFillColor(37, 99, 235)
-      doc.rect(x, y, tableWidth, rowHeight, 'F')
-      doc.setTextColor(255, 255, 255)
-      colunas.forEach((coluna, colIndex) => doc.text(cortarTexto(coluna, 18), x + 2 + colIndex * colWidth, y + 4))
-      y += rowHeight
-    }
-
-    doc.setFillColor(index % 2 === 0 ? 255 : 248, index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252)
+  if (tipo === 'total') {
+    doc.setFillColor(30, 64, 175)
+    doc.setTextColor(255, 255, 255)
+  } else if (tipo === 'lucro') {
+    doc.setFillColor(220, 252, 231)
+    doc.setTextColor(22, 101, 52)
+  } else if (tipo === 'saldo') {
+    doc.setFillColor(239, 246, 255)
+    doc.setTextColor(37, 99, 235)
+  } else if (index % 2 === 0) {
+    doc.setFillColor(255, 255, 255)
     doc.setTextColor(15, 23, 42)
-    doc.rect(x, y, tableWidth, rowHeight, 'F')
-    doc.setDrawColor(226, 232, 240)
-    doc.rect(x, y, tableWidth, rowHeight)
-    doc.setFontSize(5.8)
+  } else {
+    doc.setFillColor(248, 250, 252)
+    doc.setTextColor(15, 23, 42)
+  }
 
-    colunas.forEach((coluna, colIndex) => {
-      const valor = linha[coluna]
-      const texto = typeof valor === 'number' && coluna.toLowerCase().includes('valor') || coluna.toLowerCase().includes('total')
-        ? moeda(valor)
-        : String(valor ?? '-')
-      doc.text(cortarTexto(texto, 22), x + 2 + colIndex * colWidth, y + 4, { maxWidth: colWidth - 3 })
-    })
+  doc.rect(x, y, 184, rowHeight, 'F')
+  doc.setDrawColor(226, 232, 240)
+  doc.rect(x, y, 184, rowHeight)
+  doc.setFontSize(6.5)
 
-    y += rowHeight
+  const textoLinha = [
+    linha[0],
+    valorOuTraco(linha[1]),
+    linha[2] || '-',
+    valorOuTraco(linha[3]),
+    valorOuTraco(linha[4]),
+    valorOuTraco(linha[5])
+  ]
+
+  let colX = x
+  textoLinha.forEach((texto, colIndex) => {
+    const textoCortado = cortarTexto(String(texto), colIndex === 0 ? 32 : 14)
+    doc.text(textoCortado, colX + 2, y + 4, { maxWidth: colWidths[colIndex] - 4 })
+    colX += colWidths[colIndex]
   })
 
-  return y
+  return y + rowHeight
+}
+
+function desenharSecaoDetalhesPDF(doc, relatorio) {
+  const detalhes = relatorio.dados.detalhesImportados || {}
+  const blocos = [
+    ['Detalhe Faturamento', detalhes.faturamento || []],
+    ['Detalhe Estoque / Materiais', detalhes.estoque || []],
+    ['Detalhe Assessoria Técnica', detalhes.assessoria || []]
+  ]
+
+  blocos.forEach(([titulo, itens]) => {
+    if (!itens.length) return
+
+    doc.addPage()
+    configurarPaginaPDF(doc)
+    doc.setTextColor(15, 23, 42)
+    doc.setFontSize(15)
+    doc.text(titulo, 14, 18)
+
+    let y = 28
+    itens.slice(0, 35).forEach((item, index) => {
+      if (y > 275) {
+        desenharRodapeSimples(doc)
+        doc.addPage()
+        configurarPaginaPDF(doc)
+        y = 18
+      }
+
+      doc.setFillColor(index % 2 === 0 ? 248 : 255, 250, 252)
+      doc.rect(14, y, 182, 8, 'F')
+      doc.setTextColor(15, 23, 42)
+      doc.setFontSize(6.5)
+      const texto = item.descricao || item.processo || item.fonte || 'Registro importado'
+      const valor = item.valorConsiderado || item.valorOriginal || item.valor || 0
+      doc.text(cortarTexto(String(texto), 80), 16, y + 5)
+      doc.text(valorOuTraco(valor), 170, y + 5)
+      y += 8
+    })
+  })
 }
 
 function desenharRodapePDF(doc, relatorio) {
-  const totalPaginas = doc.internal.getNumberOfPages()
-  for (let i = 1; i <= totalPaginas; i++) {
+  const totalPages = doc.internal.getNumberOfPages()
+
+  for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
     doc.setDrawColor(226, 232, 240)
     doc.line(14, 286, 196, 286)
     doc.setTextColor(100, 116, 139)
     doc.setFontSize(7)
     doc.text(`Gerado em: ${relatorio.data}`, 14, 292)
-    doc.text(`Página ${i} de ${totalPaginas}`, 90, 292)
+    doc.text(`Página ${i} de ${totalPages}`, 95, 292)
     doc.text('Painel BI • Gestão de Indicadores', 150, 292)
   }
 }
@@ -1224,16 +1349,11 @@ function montarLinhasConsolidadas(dados, resumo) {
     return [campo.nome, valor, `${dados.razaoArea}%`, valorArea, valorArea, 0, 'normal']
   })
 
-  const totalFixos = linhasFixos.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
-
   const linhasManuais = CAMPOS_MANUAIS.map((campo) => {
     const valor = Number(dados.manuais?.[campo.key] || 0)
     const entrada = campo.key === 'saldoAnterior'
     return [campo.nome, valor, 'Não se aplica', 0, entrada ? 0 : valor, entrada ? valor : 0, 'normal']
   })
-
-  const totalManuaisSaida = linhasManuais.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
-  const totalManuaisEntrada = linhasManuais.reduce((acc, linha) => acc + Number(linha[5] || 0), 0)
 
   const linhasImportados = CAMPOS_IMPORTADOS.map((campo) => {
     const valor = Number(dados.importados?.[campo.key] || 0)
@@ -1241,6 +1361,9 @@ function montarLinhasConsolidadas(dados, resumo) {
     return [campo.nome, valor, 'Importado', 0, entrada ? 0 : valor, entrada ? valor : 0, 'normal']
   })
 
+  const totalFixos = linhasFixos.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
+  const totalManuaisSaida = linhasManuais.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
+  const totalManuaisEntrada = linhasManuais.reduce((acc, linha) => acc + Number(linha[5] || 0), 0)
   const totalImportadosValor = linhasImportados.reduce((acc, linha) => acc + Number(linha[1] || 0), 0)
   const totalImportadosSaida = linhasImportados.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
   const totalImportadosEntrada = linhasImportados.reduce((acc, linha) => acc + Number(linha[5] || 0), 0)
@@ -1275,61 +1398,51 @@ function TabelaResumo({ dados, resumo }) {
             <th className="text-right p-3">Entrada</th>
           </tr>
         </thead>
+
         <tbody>
-          {CAMPOS_FIXOS.map((campo) => <LinhaResumo key={campo.key} nome={campo.nome} valor={dados.fixos?.[campo.key] || 0} razao={dados.razaoArea} aplicarRazao />)}
-          {CAMPOS_MANUAIS.map((campo) => <LinhaResumo key={campo.key} nome={campo.nome} valor={dados.manuais?.[campo.key] || 0} razao={campo.key === 'saldoAnterior' ? null : 'Não se aplica'} entrada={campo.key === 'saldoAnterior'} />)}
-          {CAMPOS_IMPORTADOS.map((campo) => <LinhaResumo key={campo.key} nome={campo.nome} valor={dados.importados?.[campo.key] || 0} entrada={campo.key.includes('faturamento')} />)}
-          <tr className="bg-slate-950/80 font-bold">
-            <td className="p-3">TOTAL</td>
-            <td className="p-3 text-right">-</td>
-            <td className="p-3 text-right">{dados.razaoArea}%</td>
-            <td className="p-3 text-right">{moeda(resumo.saidasFixasRateadas)}</td>
-            <td className="p-3 text-right text-red-300">{moeda(resumo.saidas)}</td>
-            <td className="p-3 text-right text-green-300">{moeda(resumo.entradas)}</td>
-          </tr>
-          <tr className="bg-green-900/30 font-bold">
-            <td className="p-3">RESULTADO DO MÊS</td>
-            <td colSpan="4" className="p-3 text-right">Lucro líquido</td>
-            <td className="p-3 text-right text-green-300">{moeda(resumo.lucro)}</td>
-          </tr>
-          <tr className="bg-blue-900/30 font-bold">
-            <td className="p-3">SALDO ACUMULADO</td>
-            <td colSpan="4" className="p-3 text-right">Resultado + saldo anterior</td>
-            <td className="p-3 text-right text-blue-300">{moeda(resumo.saldoAcumulado)}</td>
-          </tr>
+          {montarLinhasConsolidadas(dados, resumo).map((linha, index) => (
+            <LinhaResumoCompleta key={`${linha[0]}-${index}`} linha={linha} />
+          ))}
         </tbody>
       </table>
     </div>
   )
 }
 
-function DetalhesImportados({ detalhes }) {
-  const total =
-    (detalhes?.faturamento?.length || 0) +
-    (detalhes?.estoque?.length || 0) +
-    (detalhes?.assessoria?.length || 0)
+function LinhaResumoCompleta({ linha }) {
+  const tipo = linha[6]
 
-  if (!total) return null
+  if (tipo === 'secaoAzul' || tipo === 'secaoVermelha' || tipo === 'secaoVerde') {
+    const classe = {
+      secaoAzul: 'bg-blue-900/30 text-blue-300',
+      secaoVermelha: 'bg-red-900/30 text-red-300',
+      secaoVerde: 'bg-green-900/30 text-green-300'
+    }[tipo]
+
+    return (
+      <tr className={`${classe} font-bold`}>
+        <td colSpan="6" className="p-3">{linha[0]}</td>
+      </tr>
+    )
+  }
+
+  const classe = tipo === 'total'
+    ? 'bg-blue-950 text-white font-bold'
+    : tipo === 'lucro'
+      ? 'bg-green-900/30 text-green-300 font-bold'
+      : tipo === 'saldo'
+        ? 'bg-blue-900/30 text-blue-300 font-bold'
+        : 'border-b border-slate-800'
 
   return (
-    <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
-      <h2 className="text-xl font-bold mb-4">Detalhamentos Importados</h2>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <ResumoDetalhe titulo="Faturamento" total={detalhes?.faturamento?.length || 0} />
-        <ResumoDetalhe titulo="Estoque / Materiais" total={detalhes?.estoque?.length || 0} />
-        <ResumoDetalhe titulo="Assessoria Técnica" total={detalhes?.assessoria?.length || 0} />
-      </div>
-    </section>
-  )
-}
-
-function ResumoDetalhe({ titulo, total }) {
-  return (
-    <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4">
-      <p className="text-slate-400 text-sm">{titulo}</p>
-      <p className="text-2xl font-bold mt-2">{total}</p>
-      <p className="text-xs text-blue-300 mt-1">registro(s) disponíveis nos relatórios</p>
-    </div>
+    <tr className={classe}>
+      <td className="p-3">{linha[0]}</td>
+      <td className="p-3 text-right">{valorOuTraco(linha[1])}</td>
+      <td className="p-3 text-right">{linha[2] || '-'}</td>
+      <td className="p-3 text-right">{valorOuTraco(linha[3])}</td>
+      <td className="p-3 text-right text-red-300">{valorOuTraco(linha[4])}</td>
+      <td className="p-3 text-right text-green-300">{valorOuTraco(linha[5])}</td>
+    </tr>
   )
 }
 
@@ -1340,19 +1453,25 @@ function PainelCampos({ titulo, subtitulo, campos, grupo, dados, onChange, edita
         <h2 className="text-xl font-bold">{titulo}</h2>
         {acao}
       </div>
+
       <p className="text-slate-500 text-sm mt-1 mb-5">{subtitulo}</p>
+
       <div className="space-y-4">
         {campos.map((campo) => (
           <div key={campo.key}>
             <label className="text-sm text-slate-400">{campo.nome}</label>
+
             <div className="relative mt-1">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">R$</span>
+
               <input
                 type="number"
                 value={dados?.[campo.key] || ''}
                 onChange={(e) => onChange(grupo, campo.key, e.target.value)}
                 disabled={!editavel}
-                className={`w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 pr-4 py-3 outline-none focus:border-blue-500 ${!editavel ? 'opacity-70 cursor-not-allowed text-slate-400' : ''}`}
+                className={`w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 pr-4 py-3 outline-none focus:border-blue-500 ${
+                  !editavel ? 'opacity-70 cursor-not-allowed text-slate-400' : ''
+                }`}
                 placeholder="0,00"
               />
             </div>
@@ -1360,20 +1479,6 @@ function PainelCampos({ titulo, subtitulo, campos, grupo, dados, onChange, edita
         ))}
       </div>
     </div>
-  )
-}
-
-function LinhaResumo({ nome, valor, razao, aplicarRazao, entrada }) {
-  const valorArea = aplicarRazao ? valor * (Number(razao) / 100) : valor
-  return (
-    <tr className="border-b border-slate-800">
-      <td className="p-3">{nome}</td>
-      <td className="p-3 text-right">{moeda(valor)}</td>
-      <td className="p-3 text-right">{razao ? `${razao}%` : '-'}</td>
-      <td className="p-3 text-right">{aplicarRazao ? moeda(valorArea) : '-'}</td>
-      <td className="p-3 text-right text-red-300">{!entrada ? moeda(valorArea) : '-'}</td>
-      <td className="p-3 text-right text-green-300">{entrada ? moeda(valor) : '-'}</td>
-    </tr>
   )
 }
 
@@ -1386,61 +1491,37 @@ function Card({ titulo, valor }) {
   )
 }
 
-function obterTokensMes(mesReferencia = '') {
-  const mes = normalizarTexto(String(mesReferencia).split('/')[0])
-  const mapa = {
-    JANEIRO: ['JAN', 'JANEIRO', '01'],
-    FEVEREIRO: ['FEV', 'FEVEREIRO', '02'],
-    MARCO: ['MAR', 'MARCO', 'MARÇO', '03'],
-    ABRIL: ['ABR', 'ABRIL', '04'],
-    MAIO: ['MAI', 'MAIO', '05'],
-    JUNHO: ['JUN', 'JUNHO', '06'],
-    JULHO: ['JUL', 'JULHO', '07'],
-    AGOSTO: ['AGO', 'AGOSTO', '08'],
-    SETEMBRO: ['SET', 'SETEMBRO', '09'],
-    OUTUBRO: ['OUT', 'OUTUBRO', '10'],
-    NOVEMBRO: ['NOV', 'NOVEMBRO', '11'],
-    DEZEMBRO: ['DEZ', 'DEZEMBRO', '12']
-  }
-
-  return mapa[mes] || [mes]
-}
-
 function somaObjeto(obj = {}) {
   return Object.values(obj).reduce((acc, valor) => acc + Number(valor || 0), 0)
 }
 
+function somaCampos(obj = {}, campos = []) {
+  return campos.reduce((acc, campo) => acc + Number(obj?.[campo.key] || 0), 0)
+}
+
 function converterNumero(valor) {
   if (typeof valor === 'number') return valor
-  return Number(String(valor).replace(',', '.')) || 0
-}
-
-function numero(valor) {
-  if (valor === null || valor === undefined || valor === '') return 0
-  if (typeof valor === 'number') return valor
-  const limpo = String(valor).replace(/[R$\s.]/g, '').replace(',', '.')
-  const convertido = Number(limpo)
-  return Number.isFinite(convertido) ? convertido : 0
-}
-
-function arredondar(valor) {
-  return Math.round(Number(valor || 0) * 100) / 100
-}
-
-function formatarMoedaCurta(valor) {
-  const numero = Number(valor || 0)
-  if (Math.abs(numero) >= 1000000) return `R$ ${(numero / 1000000).toFixed(1)}M`
-  if (Math.abs(numero) >= 1000) return `R$ ${(numero / 1000).toFixed(0)}k`
-  return `R$ ${numero.toFixed(0)}`
+  if (valor instanceof Date) return 0
+  return Number(String(valor || '').replace('R$', '').replace(/\./g, '').replace(',', '.')) || 0
 }
 
 function moeda(valor) {
-  return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return Number(valor || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  })
+}
+
+function moedaCompacta(valor) {
+  const numero = Number(valor || 0)
+  if (Math.abs(numero) >= 1000000) return `R$ ${(numero / 1000000).toFixed(1)} mi`
+  if (Math.abs(numero) >= 1000) return `R$ ${(numero / 1000).toFixed(0)}k`
+  return moeda(numero)
 }
 
 function valorOuTraco(valor) {
-  const n = Number(valor || 0)
-  return n === 0 ? '-' : moeda(n)
+  const numero = Number(valor || 0)
+  return numero === 0 ? '-' : moeda(numero)
 }
 
 function cortarTexto(texto, limite) {
@@ -1460,15 +1541,49 @@ function normalizarTexto(texto) {
     .trim()
 }
 
-function formatarDataExcel(valor) {
+function aliasesMes(mesReferencia) {
+  const texto = normalizarTexto(mesReferencia)
+
+  const mapa = {
+    JANEIRO: ['JAN', 'JANEIRO', '01'],
+    FEVEREIRO: ['FEV', 'FEVEREIRO', '02'],
+    MARCO: ['MAR', 'MARCO', 'MARÇO', '03'],
+    ABRIL: ['ABR', 'ABRIL', '04'],
+    MAIO: ['MAI', 'MAIO', '05'],
+    JUNHO: ['JUN', 'JUNHO', '06'],
+    JULHO: ['JUL', 'JULHO', '07'],
+    AGOSTO: ['AGO', 'AGOSTO', '08'],
+    SETEMBRO: ['SET', 'SETEMBRO', '09'],
+    OUTUBRO: ['OUT', 'OUTUBRO', '10'],
+    NOVEMBRO: ['NOV', 'NOVEMBRO', '11'],
+    DEZEMBRO: ['DEZ', 'DEZEMBRO', '12']
+  }
+
+  const chave = Object.keys(mapa).find((mes) => texto.includes(mes))
+  return chave ? mapa[chave].map(normalizarTexto) : []
+}
+
+function formatarDataCelula(valor) {
   if (!valor) return ''
   if (valor instanceof Date) return valor.toLocaleDateString('pt-BR')
-  if (typeof valor === 'number') {
-    const date = XLSX.SSF.parse_date_code(valor)
-    if (!date) return String(valor)
-    return `${String(date.d).padStart(2, '0')}/${String(date.m).padStart(2, '0')}/${date.y}`
-  }
   return String(valor)
+}
+
+function arredondar(valor) {
+  return Number(Number(valor || 0).toFixed(2))
+}
+
+function limitarDetalhes(lista = []) {
+  return (lista || []).slice(0, 500)
+}
+
+function hexToRgb(hex) {
+  const clean = hex.replace('#', '')
+  return [
+    parseInt(clean.substring(0, 2), 16),
+    parseInt(clean.substring(2, 4), 16),
+    parseInt(clean.substring(4, 6), 16)
+  ]
 }
 
 function carregarImagem(url) {
