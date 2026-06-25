@@ -6,6 +6,9 @@ import jsPDF from 'jspdf'
 const STORAGE_KEY = 'ox360_financeiro_valores'
 const RAZAO_AREA_PADRAO = 21.92
 
+const LOGO_PAINEL_BI_URL = '/logo-painel-bi.png'
+const LOGO_CDL_URL = '/logo-cdl.png'
+
 const CAMPOS_FIXOS = [
   { key: 'iptu', nome: 'IPTU 2025' },
   { key: 'condominio', nome: 'Condomínio' },
@@ -80,37 +83,7 @@ function OX360Financeiro() {
     }
   })
 
-  const resumo = useMemo(() => {
-    const fixosTotal = somaObjeto(dados.fixos)
-    const manuaisTotal = somaObjeto(dados.manuais)
-
-    const entradas =
-      Number(dados.importados?.faturamentoParticular || 0) +
-      Number(dados.importados?.faturamentoConvenio || 0)
-
-    const saidasFixasRateadas =
-      fixosTotal * (Number(dados.razaoArea || 0) / 100)
-
-    const saidas =
-      saidasFixasRateadas +
-      manuaisTotal +
-      Number(dados.importados?.estoqueMateriais || 0) +
-      Number(dados.importados?.assessoriaTecnica || 0)
-
-    const lucro = entradas - saidas
-    const saldoAcumulado = lucro + Number(dados.manuais?.saldoAnterior || 0)
-    const margem = entradas > 0 ? (lucro / entradas) * 100 : 0
-
-    return {
-      entradas,
-      saidas,
-      lucro,
-      saldoAcumulado,
-      margem,
-      fixosTotal,
-      saidasFixasRateadas
-    }
-  }, [dados])
+  const resumo = useMemo(() => calcularResumo(dados), [dados])
 
   function salvar(novosDados = dados) {
     setDados(novosDados)
@@ -140,7 +113,6 @@ function OX360Financeiro() {
       manuais: {},
       importados: {}
     })
-
     toast.success('Tabela limpa. Os valores fixos foram mantidos.')
   }
 
@@ -159,16 +131,15 @@ function OX360Financeiro() {
     }
   }
 
-  function gerarRelatorio() {
+  async function gerarRelatorio() {
     const relatorio = montarRelatorio()
 
-    const novosDados = {
+    salvar({
       ...dados,
       historico: [relatorio, ...(dados.historico || [])]
-    }
+    })
 
-    salvar(novosDados)
-    gerarPDFRelatorio(relatorio)
+    await gerarPDFRelatorio(relatorio)
     toast.success('Relatório PDF gerado e salvo no histórico.')
   }
 
@@ -177,7 +148,6 @@ function OX360Financeiro() {
       ...dados,
       historico: dados.historico.filter((item) => item.id !== id)
     })
-
     toast.success('Relatório removido do histórico.')
   }
 
@@ -186,14 +156,9 @@ function OX360Financeiro() {
     toast.success('Planilha Excel exportada com sucesso.')
   }
 
-  function baixarRelatorioPDF(relatorio) {
-    gerarPDFRelatorio(relatorio)
+  async function baixarRelatorio(relatorio) {
+    await gerarPDFRelatorio(relatorio)
     toast.success('PDF baixado novamente.')
-  }
-
-  function baixarRelatorioExcel(relatorio) {
-    gerarExcelRelatorio(relatorio)
-    toast.success('Excel baixado novamente.')
   }
 
   return (
@@ -287,9 +252,7 @@ function OX360Financeiro() {
 
       <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
         <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="text-xl font-bold">
-            Resumo Consolidado - {dados.mesReferencia}
-          </h2>
+          <h2 className="text-xl font-bold">Resumo Consolidado - {dados.mesReferencia}</h2>
 
           <div className="flex gap-3">
             <button
@@ -350,7 +313,7 @@ function OX360Financeiro() {
             {dados.historico.map((relatorio) => (
               <div
                 key={relatorio.id}
-                className="flex items-center justify-between gap-4 bg-slate-950/70 border border-slate-800 rounded-2xl p-4"
+                className="flex items-center justify-between bg-slate-950/70 border border-slate-800 rounded-2xl p-4"
               >
                 <div>
                   <p className="font-bold">{relatorio.mesReferencia}</p>
@@ -360,16 +323,16 @@ function OX360Financeiro() {
                   </p>
                 </div>
 
-                <div className="flex gap-2 shrink-0">
+                <div className="flex gap-2">
                   <button
-                    onClick={() => baixarRelatorioPDF(relatorio)}
+                    onClick={() => baixarRelatorio(relatorio)}
                     className="bg-blue-600 hover:bg-blue-500 transition rounded-xl px-4 py-2 font-bold"
                   >
                     Baixar PDF
                   </button>
 
                   <button
-                    onClick={() => baixarRelatorioExcel(relatorio)}
+                    onClick={() => gerarExcelRelatorio(relatorio)}
                     className="bg-slate-700 hover:bg-slate-600 transition rounded-xl px-4 py-2 font-bold"
                   >
                     Baixar Excel
@@ -391,6 +354,37 @@ function OX360Financeiro() {
   )
 }
 
+function calcularResumo(dados) {
+  const fixosTotal = somaObjeto(dados.fixos)
+  const manuaisTotal = somaObjeto(dados.manuais)
+
+  const entradas =
+    Number(dados.importados?.faturamentoParticular || 0) +
+    Number(dados.importados?.faturamentoConvenio || 0)
+
+  const saidasFixasRateadas = fixosTotal * (Number(dados.razaoArea || 0) / 100)
+
+  const saidas =
+    saidasFixasRateadas +
+    manuaisTotal +
+    Number(dados.importados?.estoqueMateriais || 0) +
+    Number(dados.importados?.assessoriaTecnica || 0)
+
+  const lucro = entradas - saidas
+  const saldoAcumulado = lucro + Number(dados.manuais?.saldoAnterior || 0)
+  const margem = entradas > 0 ? (lucro / entradas) * 100 : 0
+
+  return {
+    entradas,
+    saidas,
+    lucro,
+    saldoAcumulado,
+    margem,
+    fixosTotal,
+    saidasFixasRateadas
+  }
+}
+
 function gerarExcelRelatorio(relatorio) {
   const wb = XLSX.utils.book_new()
 
@@ -410,7 +404,7 @@ function gerarExcelRelatorio(relatorio) {
   ]
 
   const wsResumo = XLSX.utils.aoa_to_sheet(resumo)
-  wsResumo['!cols'] = [{ wch: 28 }, { wch: 22 }]
+  wsResumo['!cols'] = [{ wch: 30 }, { wch: 24 }]
   XLSX.utils.book_append_sheet(wb, wsResumo, 'Resumo Executivo')
 
   adicionarAba(wb, 'Valores Fixos', CAMPOS_FIXOS, relatorio.dados.fixos)
@@ -422,17 +416,16 @@ function gerarExcelRelatorio(relatorio) {
     ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
     ...consolidado
   ])
-
   wsConsolidado['!cols'] = [
-    { wch: 36 },
+    { wch: 38 },
     { wch: 18 },
     { wch: 14 },
     { wch: 18 },
     { wch: 18 },
     { wch: 18 }
   ]
-
   XLSX.utils.book_append_sheet(wb, wsConsolidado, 'Consolidado')
+
   XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
 }
 
@@ -447,211 +440,279 @@ function adicionarAba(wb, nomeAba, campos, valores = {}) {
   XLSX.utils.book_append_sheet(wb, ws, nomeAba)
 }
 
-function gerarPDFRelatorio(relatorio) {
-  const doc = new jsPDF('p', 'mm', 'a4')
-  const nome = `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`
+async function gerarPDFRelatorio(relatorio) {
+  try {
+    const doc = new jsPDF('p', 'mm', 'a4')
+    const dados = relatorio.dados
+    const resumo = relatorio.resumo
 
-  const largura = 210
-  const altura = 297
-  const margem = 14
-  let y = 18
+    const painelLogo = await carregarImagem(LOGO_PAINEL_BI_URL)
+    const cdlLogo = await carregarImagem(LOGO_CDL_URL)
 
-  function paginaBase() {
-    doc.setFillColor(2, 8, 23)
-    doc.rect(0, 0, largura, altura, 'F')
+    configurarPaginaPDF(doc)
+    desenharCabecalhoPDF(doc, painelLogo, cdlLogo)
+    desenharTituloPDF(doc, relatorio)
+    desenharCardsPDF(doc, relatorio)
+    desenharTabelaPDF(doc, dados, resumo)
+    desenharRodapePDF(doc, relatorio)
 
+    doc.save(`OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`)
+  } catch (error) {
+    console.error(error)
+    toast.error('Erro ao gerar PDF. Verifique o console do navegador.')
+  }
+}
+
+function configurarPaginaPDF(doc) {
+  doc.setFillColor(255, 255, 255)
+  doc.rect(0, 0, 210, 297, 'F')
+}
+
+function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
+  if (painelLogo) {
+    doc.addImage(painelLogo, 'PNG', 14, 11, 38, 18)
+  } else {
     doc.setFillColor(37, 99, 235)
-    doc.roundedRect(margem, 10, 14, 14, 3, 3, 'F')
+    doc.roundedRect(14, 10, 14, 14, 3, 3, 'F')
     doc.setTextColor(255, 255, 255)
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'bold')
-    doc.text('BI', margem + 4, 19)
-
-    doc.setTextColor(148, 163, 184)
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    doc.text('Painel BI • Gestão de Indicadores', margem + 20, 16)
-
-    doc.setDrawColor(30, 41, 59)
-    doc.line(margem, 27, largura - margem, 27)
-
-    doc.setTextColor(100, 116, 139)
-    doc.setFontSize(8)
-    doc.text(`Gerado em ${relatorio.data}`, margem, 287)
-    doc.text('CDL • OX360 Financeiro', 145, 287)
-  }
-
-  function novaPagina() {
-    doc.addPage()
-    paginaBase()
-    y = 38
-  }
-
-  function precisaEspaco(espaco) {
-    if (y + espaco > 274) novaPagina()
-  }
-
-  function tituloSecao(titulo) {
-    precisaEspaco(14)
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(13)
-    doc.text(titulo, margem, y)
-    y += 8
-  }
-
-  function card(x, yCard, w, h, titulo, valor, destaque = false) {
-    doc.setFillColor(destaque ? 30 : 15, destaque ? 64 : 23, destaque ? 175 : 42)
-    doc.roundedRect(x, yCard, w, h, 4, 4, 'F')
-
-    doc.setTextColor(203, 213, 225)
     doc.setFontSize(7)
-    doc.setFont('helvetica', 'normal')
-    doc.text(titulo, x + 4, yCard + 7)
-
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    doc.text(String(valor), x + 4, yCard + 16)
+    doc.text('BI', 18, 19)
+    doc.setTextColor(15, 23, 42)
+    doc.setFontSize(13)
+    doc.text('Painel BI', 32, 17)
+    doc.setTextColor(71, 85, 105)
+    doc.setFontSize(8)
+    doc.text('Gestão de Indicadores', 32, 23)
   }
 
-  function linhaTabela(colunas, larguras, opcoes = {}) {
-    precisaEspaco(8)
-
-    const xInicial = margem
-    let x = xInicial
-    const alturaLinha = opcoes.header ? 8 : 7
-
-    if (opcoes.header) {
-      doc.setFillColor(37, 99, 235)
-    } else if (opcoes.total) {
-      doc.setFillColor(15, 23, 42)
-    } else {
-      doc.setFillColor(2, 8, 23)
-    }
-
-    doc.rect(xInicial, y - 5.5, larguras.reduce((a, b) => a + b, 0), alturaLinha, 'F')
-
-    doc.setDrawColor(30, 41, 59)
-    doc.line(xInicial, y + 2, xInicial + larguras.reduce((a, b) => a + b, 0), y + 2)
-
-    colunas.forEach((texto, index) => {
-      doc.setTextColor(opcoes.header ? 255 : 226, opcoes.header ? 255 : 232, opcoes.header ? 255 : 240)
-      doc.setFontSize(opcoes.header ? 7 : 6.7)
-      doc.setFont('helvetica', opcoes.header || opcoes.total ? 'bold' : 'normal')
-
-      const textoFinal = String(texto ?? '-')
-      const alinhadoDireita = index > 0
-      const limite = larguras[index] - 3
-      const linhas = doc.splitTextToSize(textoFinal, limite)
-      const linha = linhas[0]
-
-      if (alinhadoDireita) {
-        doc.text(linha, x + larguras[index] - 2, y, { align: 'right' })
-      } else {
-        doc.text(linha, x + 2, y)
-      }
-
-      x += larguras[index]
-    })
-
-    y += alturaLinha
+  if (cdlLogo) {
+    doc.addImage(cdlLogo, 'PNG', 160, 9, 36, 20)
+  } else {
+    doc.setTextColor(37, 99, 235)
+    doc.setFontSize(20)
+    doc.text('CDL', 170, 18)
+    doc.setTextColor(71, 85, 105)
+    doc.setFontSize(7)
+    doc.text('Laboratório Santos e Vidal', 160, 25)
   }
 
-  paginaBase()
+  doc.setDrawColor(37, 99, 235)
+  doc.setLineWidth(0.5)
+  doc.line(14, 34, 196, 34)
+}
 
-  doc.setTextColor(96, 165, 250)
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'bold')
-  doc.text('Diretoria', margem, 40)
+function desenharTituloPDF(doc, relatorio) {
+  doc.setTextColor(37, 99, 235)
+  doc.setFontSize(9)
+  doc.text('DIRETORIA', 14, 47)
+
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(24)
+  doc.text('OX360 FINANCEIRO', 14, 59)
+
+  doc.setTextColor(71, 85, 105)
+  doc.setFontSize(9)
+  doc.text(`Mês referência: ${relatorio.mesReferencia}`, 14, 70)
+}
+
+function desenharCardsPDF(doc, relatorio) {
+  const cards = [
+    { titulo: 'Receita Total', valor: moeda(relatorio.receitaTotal), cor: [37, 99, 235] },
+    { titulo: 'Despesa Total', valor: moeda(relatorio.despesaTotal), cor: [220, 38, 38] },
+    { titulo: 'Lucro Líquido', valor: moeda(relatorio.lucroLiquido), cor: [22, 163, 74] },
+    { titulo: 'Margem Líquida', valor: `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`, cor: [124, 58, 237] },
+    { titulo: 'Saldo Acumulado', valor: moeda(relatorio.saldoAcumulado), cor: [37, 99, 235] }
+  ]
+
+  let x = 14
+  const y = 82
+
+  cards.forEach((card) => {
+    doc.setFillColor(248, 250, 252)
+    doc.setDrawColor(226, 232, 240)
+    doc.roundedRect(x, y, 34, 28, 3, 3, 'FD')
+
+    doc.setTextColor(...card.cor)
+    doc.setFontSize(7)
+    doc.text(card.titulo, x + 4, y + 9)
+
+    doc.setTextColor(15, 23, 42)
+    doc.setFontSize(10)
+    doc.text(card.valor, x + 4, y + 18)
+
+    x += 37
+  })
+}
+
+function desenharTabelaPDF(doc, dados, resumo) {
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(13)
+  doc.text('Resumo consolidado', 14, 124)
+
+  const colunas = ['Descrição', 'Valor Total', 'Razão', 'Valor Área', 'Saída', 'Entrada']
+  const linhas = montarLinhasConsolidadas(dados, resumo)
+
+  const x = 14
+  let y = 130
+  const colWidths = [64, 25, 22, 25, 24, 24]
+  const rowHeight = 6
+
+  doc.setFillColor(37, 99, 235)
+  doc.rect(x, y, 184, rowHeight, 'F')
 
   doc.setTextColor(255, 255, 255)
-  doc.setFontSize(24)
-  doc.text('OX360 Financeiro', margem, 52)
+  doc.setFontSize(7)
 
-  doc.setTextColor(203, 213, 225)
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text(`Mês referência: ${relatorio.mesReferencia}`, margem, 61)
+  let colX = x
+  colunas.forEach((col, index) => {
+    doc.text(col, colX + 2, y + 4)
+    colX += colWidths[index]
+  })
 
-  y = 76
+  y += rowHeight
 
-  card(14, y, 35, 22, 'Receita Total', moeda(relatorio.receitaTotal), true)
-  card(53, y, 35, 22, 'Despesa Total', moeda(relatorio.despesaTotal))
-  card(92, y, 35, 22, 'Lucro Líquido', moeda(relatorio.lucroLiquido), relatorio.lucroLiquido >= 0)
-  card(131, y, 28, 22, 'Margem', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`)
-  card(163, y, 33, 22, 'Saldo', moeda(relatorio.saldoAcumulado))
+  linhas.forEach((linha, index) => {
+    if (y > 275) {
+      desenharRodapeSimples(doc)
+      doc.addPage()
+      configurarPaginaPDF(doc)
+      y = 18
+    }
 
-  y += 38
+    const tipo = linha[6]
 
-  tituloSecao('Resumo consolidado')
+    if (tipo === 'secaoAzul') {
+      doc.setFillColor(239, 246, 255)
+      doc.setTextColor(37, 99, 235)
+      doc.setFontSize(7)
+      doc.rect(x, y, 184, rowHeight, 'F')
+      doc.text(linha[0], x + 2, y + 4)
+      y += rowHeight
+      return
+    }
 
-  const larguras = [55, 28, 22, 28, 28, 28]
-  linhaTabela(['Descrição', 'Valor Total', 'Razão', 'Valor Área', 'Saída', 'Entrada'], larguras, { header: true })
+    if (tipo === 'secaoVermelha') {
+      doc.setFillColor(254, 242, 242)
+      doc.setTextColor(220, 38, 38)
+      doc.setFontSize(7)
+      doc.rect(x, y, 184, rowHeight, 'F')
+      doc.text(linha[0], x + 2, y + 4)
+      y += rowHeight
+      return
+    }
 
-  montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).forEach((linha) => {
-    const total = ['TOTAL', 'RESULTADO DO MÊS', 'SALDO ACUMULADO'].includes(linha[0])
+    if (tipo === 'secaoVerde') {
+      doc.setFillColor(240, 253, 244)
+      doc.setTextColor(22, 163, 74)
+      doc.setFontSize(7)
+      doc.rect(x, y, 184, rowHeight, 'F')
+      doc.text(linha[0], x + 2, y + 4)
+      y += rowHeight
+      return
+    }
 
-    linhaTabela([
+    if (tipo === 'total') {
+      doc.setFillColor(30, 64, 175)
+      doc.setTextColor(255, 255, 255)
+    } else if (tipo === 'lucro') {
+      doc.setFillColor(220, 252, 231)
+      doc.setTextColor(22, 101, 52)
+    } else if (tipo === 'saldo') {
+      doc.setFillColor(239, 246, 255)
+      doc.setTextColor(37, 99, 235)
+    } else if (index % 2 === 0) {
+      doc.setFillColor(255, 255, 255)
+      doc.setTextColor(15, 23, 42)
+    } else {
+      doc.setFillColor(248, 250, 252)
+      doc.setTextColor(15, 23, 42)
+    }
+
+    doc.rect(x, y, 184, rowHeight, 'F')
+    doc.setDrawColor(226, 232, 240)
+    doc.rect(x, y, 184, rowHeight)
+
+    doc.setFontSize(6.5)
+
+    const textoLinha = [
       linha[0],
-      linha[1] ? moeda(linha[1]) : '-',
-      linha[2],
-      linha[3] ? moeda(linha[3]) : '-',
-      linha[4] ? moeda(linha[4]) : '-',
-      linha[5] ? moeda(linha[5]) : '-'
-    ], larguras, { total })
-  })
+      valorOuTraco(linha[1]),
+      linha[2] || '-',
+      valorOuTraco(linha[3]),
+      valorOuTraco(linha[4]),
+      valorOuTraco(linha[5])
+    ]
 
-  novaPagina()
-  tituloSecao('Valores fixos configuráveis')
-  linhaTabela(['Descrição', 'Valor'], [130, 50], { header: true })
-  CAMPOS_FIXOS.forEach((campo) => {
-    linhaTabela([campo.nome, moeda(relatorio.dados.fixos?.[campo.key] || 0)], [130, 50])
-  })
+    colX = x
+    textoLinha.forEach((texto, colIndex) => {
+      const maxWidth = colWidths[colIndex] - 4
+      const textoCortado = cortarTexto(String(texto), colIndex === 0 ? 32 : 14)
+      doc.text(textoCortado, colX + 2, y + 4, { maxWidth })
+      colX += colWidths[colIndex]
+    })
 
-  y += 8
-  tituloSecao('Valores manuais do mês')
-  linhaTabela(['Descrição', 'Valor'], [130, 50], { header: true })
-  CAMPOS_MANUAIS.forEach((campo) => {
-    linhaTabela([campo.nome, moeda(relatorio.dados.manuais?.[campo.key] || 0)], [130, 50])
+    y += rowHeight
   })
+}
 
-  y += 8
-  tituloSecao('Valores importados')
-  linhaTabela(['Descrição', 'Valor'], [130, 50], { header: true })
-  CAMPOS_IMPORTADOS.forEach((campo) => {
-    linhaTabela([campo.nome, moeda(relatorio.dados.importados?.[campo.key] || 0)], [130, 50])
-  })
+function desenharRodapePDF(doc, relatorio) {
+  doc.setDrawColor(226, 232, 240)
+  doc.line(14, 286, 196, 286)
+  doc.setTextColor(100, 116, 139)
+  doc.setFontSize(7)
+  doc.text(`Gerado em: ${relatorio.data}`, 14, 292)
+  doc.text('Painel BI • Gestão de Indicadores', 150, 292)
+}
 
-  doc.save(nome)
+function desenharRodapeSimples(doc) {
+  doc.setDrawColor(226, 232, 240)
+  doc.line(14, 286, 196, 286)
+  doc.setTextColor(100, 116, 139)
+  doc.setFontSize(7)
+  doc.text('Painel BI • Gestão de Indicadores', 150, 292)
 }
 
 function montarLinhasConsolidadas(dados, resumo) {
   const linhasFixos = CAMPOS_FIXOS.map((campo) => {
     const valor = Number(dados.fixos?.[campo.key] || 0)
     const valorArea = valor * (Number(dados.razaoArea || 0) / 100)
-    return [campo.nome, valor, `${dados.razaoArea}%`, valorArea, valorArea, 0]
+    return [campo.nome, valor, `${dados.razaoArea}%`, valorArea, valorArea, 0, 'normal']
   })
+
+  const totalFixos = linhasFixos.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
 
   const linhasManuais = CAMPOS_MANUAIS.map((campo) => {
     const valor = Number(dados.manuais?.[campo.key] || 0)
     const entrada = campo.key === 'saldoAnterior'
-    return [campo.nome, valor, 'Não se aplica', 0, entrada ? 0 : valor, entrada ? valor : 0]
+    return [campo.nome, valor, 'Não se aplica', 0, entrada ? 0 : valor, entrada ? valor : 0, 'normal']
   })
+
+  const totalManuaisSaida = linhasManuais.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
+  const totalManuaisEntrada = linhasManuais.reduce((acc, linha) => acc + Number(linha[5] || 0), 0)
 
   const linhasImportados = CAMPOS_IMPORTADOS.map((campo) => {
     const valor = Number(dados.importados?.[campo.key] || 0)
     const entrada = campo.key.includes('faturamento')
-    return [campo.nome, valor, 'Importado', 0, entrada ? 0 : valor, entrada ? valor : 0]
+    return [campo.nome, valor, 'Importado', 0, entrada ? 0 : valor, entrada ? valor : 0, 'normal']
   })
 
+  const totalImportadosValor = linhasImportados.reduce((acc, linha) => acc + Number(linha[1] || 0), 0)
+  const totalImportadosSaida = linhasImportados.reduce((acc, linha) => acc + Number(linha[4] || 0), 0)
+  const totalImportadosEntrada = linhasImportados.reduce((acc, linha) => acc + Number(linha[5] || 0), 0)
+
   return [
+    ['DESPESAS FIXAS (Rateadas)', '', '', '', '', '', 'secaoAzul'],
     ...linhasFixos,
+    ['Total Despesas Fixas', somaObjeto(dados.fixos), `${dados.razaoArea}%`, resumo.saidasFixasRateadas, totalFixos, 0, 'normal'],
+    ['DESPESAS MANUAIS', '', '', '', '', '', 'secaoVermelha'],
     ...linhasManuais,
+    ['Total Despesas Manuais', 0, '-', 0, totalManuaisSaida, totalManuaisEntrada, 'normal'],
+    ['VALORES IMPORTADOS', '', '', '', '', '', 'secaoVerde'],
     ...linhasImportados,
-    ['TOTAL', 0, `${dados.razaoArea}%`, resumo.saidasFixasRateadas, resumo.saidas, resumo.entradas],
-    ['RESULTADO DO MÊS', 0, '-', 0, 0, resumo.lucro],
-    ['SALDO ACUMULADO', 0, '-', 0, 0, resumo.saldoAcumulado]
+    ['Total Valores Importados', totalImportadosValor, '-', 0, totalImportadosSaida, totalImportadosEntrada, 'normal'],
+    ['TOTAL GERAL', totalImportadosValor + somaObjeto(dados.fixos), `${dados.razaoArea}%`, resumo.saidasFixasRateadas, resumo.saidas, resumo.entradas, 'total'],
+    ['LUCRO LÍQUIDO DO MÊS', 0, '-', 0, 0, resumo.lucro, 'lucro'],
+    ['SALDO ACUMULADO', 0, '-', 0, 0, resumo.saldoAcumulado, 'saldo']
   ]
 }
 
@@ -742,9 +803,7 @@ function PainelCampos({ titulo, subtitulo, campos, grupo, dados, onChange, edita
             <label className="text-sm text-slate-400">{campo.nome}</label>
 
             <div className="relative mt-1">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
-                R$
-              </span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">R$</span>
 
               <input
                 type="number"
@@ -812,8 +871,35 @@ function moeda(valor) {
   })
 }
 
+function valorOuTraco(valor) {
+  const numero = Number(valor || 0)
+  return numero === 0 ? '-' : moeda(numero)
+}
+
+function cortarTexto(texto, limite) {
+  if (texto.length <= limite) return texto
+  return `${texto.substring(0, limite - 3)}...`
+}
+
 function nomeArquivo(nome) {
   return String(nome || 'Relatorio').replaceAll('/', '_').replaceAll(' ', '_')
+}
+
+function carregarImagem(url) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.width
+      canvas.height = img.height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      resolve(canvas.toDataURL('image/png'))
+    }
+    img.onerror = () => resolve(null)
+    img.src = url
+  })
 }
 
 export default OX360Financeiro
