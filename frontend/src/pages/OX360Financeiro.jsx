@@ -661,35 +661,45 @@ function processarFaturamento(workbook, mesReferencia) {
     const isParticular = sheetNormal.includes('PART') || sheetNormal.includes('PARTICULAR')
     const isConvenio = sheetNormal.includes('CONV') || sheetNormal.includes('BRADE') || sheetNormal.includes('BRAD')
 
-    const valorIndex = isParticular
-      ? localizarColuna(headers.header, ['VL. BLC LÍQUIDO', 'VL BLC LIQUIDO', 'LIQUIDO'])
-      : localizarColuna(headers.header, ['VL FAT', 'VL. FAT', 'VALOR FAT'])
+    const valorFatIndex = localizarColuna(headers.header, ['VL FAT', 'VL. FAT', 'VALOR FAT', 'FATURADO'])
+    const valorPagoIndex = localizarColuna(headers.header, ['VL PAGO', 'VL. PAGO', 'VALOR PAGO', 'PAGO'])
+    const valorLiquidoIndex = localizarColuna(headers.header, ['VL. BLC LÍQUIDO', 'VL BLC LIQUIDO', 'BLC LIQUIDO', 'LIQUIDO'])
+
+    const valorIndex = isConvenio
+      ? escolherPrimeiraColunaValida([valorPagoIndex, valorLiquidoIndex, valorFatIndex])
+      : escolherPrimeiraColunaValida([valorLiquidoIndex, valorPagoIndex, valorFatIndex])
 
     const procedimentoIndex = localizarColuna(headers.header, ['PROCEDIMENTO'])
     const dataIndex = localizarColuna(headers.header, ['DATA'])
-    const fonteIndex = localizarColuna(headers.header, ['FONTE PAG'])
+    const osIndex = localizarColuna(headers.header, ['O.S.', 'OS'])
+    const fonteIndex = localizarColuna(headers.header, ['FONTE PAG', 'FONTE'])
     const mnemonicoIndex = localizarColuna(headers.header, ['MNEMÔNICO', 'MNEMONICO'])
+    const codAmbIndex = localizarColuna(headers.header, ['COD. AMB', 'COD AMB', 'CÓD. AMB'])
+    const glosaIndex = localizarColuna(headers.header, ['VL GLOSADO', 'VL. GLOSADO', 'GLOSADO'])
 
     if (valorIndex < 0) return
 
     rows.slice(headers.index + 1).forEach((row) => {
-      const valorBruto = converterNumero(row[valorIndex])
-      if (!valorBruto) return
+      const valorRecebido = converterNumero(row[valorIndex])
+      if (!valorRecebido) return
 
-      const valorRateado = valorBruto * 0.5
-
-      if (isParticular) particular += valorRateado
-      if (isConvenio) convenio += valorRateado
+      if (isParticular) particular += valorRecebido
+      if (isConvenio) convenio += valorRecebido
 
       detalhes.push({
         origem: isParticular ? 'Particular' : isConvenio ? 'Convênio' : 'Faturamento',
         planilha: sheetName,
         data: formatarDataCelula(row[dataIndex]),
+        os: row[osIndex] || '',
         fonte: row[fonteIndex] || '',
         mnemonico: row[mnemonicoIndex] || '',
         descricao: row[procedimentoIndex] || '',
-        valorOriginal: valorBruto,
-        valorConsiderado: valorRateado
+        codAmb: row[codAmbIndex] || '',
+        valorFaturado: converterNumero(row[valorFatIndex]),
+        valorPago: converterNumero(row[valorPagoIndex]),
+        valorGlosado: converterNumero(row[glosaIndex]),
+        valorOriginal: valorRecebido,
+        valorConsiderado: valorRecebido
       })
     })
   })
@@ -803,6 +813,10 @@ function localizarCabecalho(rows) {
   }
 
   return null
+}
+
+function escolherPrimeiraColunaValida(indices = []) {
+  return indices.find((index) => Number(index) >= 0) ?? -1
 }
 
 function localizarColuna(header, possibilidades) {
@@ -1011,15 +1025,18 @@ function montarLinhasExcelUnico(relatorio) {
     ...montarSubtotaisDetalhes(relatorio.dados.detalhesImportados?.faturamento, 'origem', 'valorConsiderado'),
     [],
     ['DETALHE FATURAMENTO'],
-    ['Origem', 'Planilha', 'Data', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Original', 'Valor Considerado'],
+    ['Origem', 'Planilha', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Faturado', 'Valor Pago', 'Valor Glosado', 'Valor Considerado'],
     ...limitarDetalhes(relatorio.dados.detalhesImportados?.faturamento).map((item) => [
       item.origem,
       item.planilha,
       item.data,
+      item.os,
       item.fonte,
       item.mnemonico,
       item.descricao,
-      item.valorOriginal,
+      item.valorFaturado,
+      item.valorPago,
+      item.valorGlosado,
       item.valorConsiderado
     ]),
     [],
@@ -1158,31 +1175,51 @@ function desenharCardsPDF(doc, relatorio) {
 
 function desenharGraficosPDF(doc, relatorio) {
   const y = 136
-  desenharBarChartPDF(doc, 14, y, 55, 26, relatorio.graficos.financeiro?.[0])
-  desenharLineChartPDF(doc, 77, y, 55, 26, relatorio.graficos.historico || [])
-  desenharDonutPDF(doc, 150, y + 13, 12, relatorio.graficos.composicao || [])
-
   doc.setTextColor(15, 23, 42)
   doc.setFontSize(8)
-  doc.text('Receitas x Despesas', 14, y - 3)
-  doc.text('Consumo 6 meses', 77, y - 3)
-  doc.text('Composição', 144, y - 3)
+  doc.text('Receitas x Despesas x Lucro', 14, y - 4)
+  doc.text('Consumo dos últimos 6 meses', 77, y - 4)
+  doc.text('Composição das despesas', 144, y - 4)
+
+  desenharBarChartPDF(doc, 14, y, 56, 30, relatorio.graficos.financeiro?.[0])
+  desenharLineChartPDF(doc, 77, y, 56, 30, relatorio.graficos.historico || [])
+  desenharDonutPDF(doc, 166, y + 15, 12, relatorio.graficos.composicao || [])
 }
 
 function desenharBarChartPDF(doc, x, y, w, h, item = {}) {
-  const valores = [item.Receitas || 0, item.Despesas || 0, item.Lucro || 0]
-  const cores = [[34, 197, 94], [239, 68, 68], [37, 99, 235]]
-  const max = Math.max(...valores.map(Math.abs), 1)
+  const dados = [
+    { nome: 'Receitas', valor: Number(item.Receitas || 0), cor: [34, 197, 94] },
+    { nome: 'Despesas', valor: Number(item.Despesas || 0), cor: [239, 68, 68] },
+    { nome: 'Lucro', valor: Number(item.Lucro || 0), cor: [37, 99, 235] }
+  ]
+
+  const max = Math.max(...dados.map((d) => Math.abs(d.valor)), 1)
+  const chartX = x + 8
+  const chartY = y + 3
+  const chartW = w - 10
+  const chartH = h - 11
 
   doc.setDrawColor(226, 232, 240)
   doc.roundedRect(x, y, w, h, 2, 2)
+  doc.setDrawColor(148, 163, 184)
+  doc.line(chartX, chartY, chartX, chartY + chartH)
+  doc.line(chartX, chartY + chartH, chartX + chartW, chartY + chartH)
 
-  valores.forEach((valor, index) => {
-    const bh = Math.max(2, Math.abs(valor) / max * (h - 8))
-    const bx = x + 8 + index * 14
-    const by = y + h - 4 - bh
-    doc.setFillColor(...cores[index])
-    doc.roundedRect(bx, by, 8, bh, 1, 1, 'F')
+  doc.setTextColor(100, 116, 139)
+  doc.setFontSize(5.2)
+  doc.text(moedaCompacta(max), x + 1.5, chartY + 2)
+  doc.text('0', x + 3.5, chartY + chartH)
+
+  dados.forEach((dado, index) => {
+    const bh = Math.max(2, Math.abs(dado.valor) / max * (chartH - 3))
+    const bx = chartX + 7 + index * 13
+    const by = chartY + chartH - bh
+    doc.setFillColor(...dado.cor)
+    doc.roundedRect(bx, by, 7, bh, 1, 1, 'F')
+    doc.setTextColor(...dado.cor)
+    doc.setFontSize(4.8)
+    doc.text(dado.nome.substring(0, 4), bx - 1, y + h - 2)
+    doc.text(moedaCompacta(dado.valor), bx - 4, by - 1.2)
   })
 }
 
@@ -1190,35 +1227,71 @@ function desenharLineChartPDF(doc, x, y, w, h, itens = []) {
   doc.setDrawColor(226, 232, 240)
   doc.roundedRect(x, y, w, h, 2, 2)
 
-  if (itens.length < 2) return
+  if (itens.length < 1) {
+    doc.setTextColor(148, 163, 184)
+    doc.setFontSize(6)
+    doc.text('Sem histórico suficiente', x + 10, y + 16)
+    return
+  }
 
+  const chartX = x + 9
+  const chartY = y + 4
+  const chartW = w - 13
+  const chartH = h - 12
   const valores = itens.map((item) => Number(item.Consumo || 0))
   const max = Math.max(...valores, 1)
   const min = Math.min(...valores, 0)
   const range = Math.max(max - min, 1)
 
+  doc.setDrawColor(148, 163, 184)
+  doc.line(chartX, chartY, chartX, chartY + chartH)
+  doc.line(chartX, chartY + chartH, chartX + chartW, chartY + chartH)
+
+  doc.setTextColor(100, 116, 139)
+  doc.setFontSize(5)
+  doc.text(moedaCompacta(max), x + 1.5, chartY + 2)
+  doc.text(moedaCompacta(min), x + 1.5, chartY + chartH)
+
   doc.setDrawColor(245, 158, 11)
-  doc.setLineWidth(0.8)
+  doc.setLineWidth(0.7)
 
   let anterior = null
   itens.forEach((item, index) => {
-    const px = x + 4 + (index / Math.max(itens.length - 1, 1)) * (w - 8)
-    const py = y + h - 4 - ((Number(item.Consumo || 0) - min) / range) * (h - 8)
+    const px = chartX + (index / Math.max(itens.length - 1, 1)) * chartW
+    const py = chartY + chartH - ((Number(item.Consumo || 0) - min) / range) * chartH
+    const mes = String(item.mes || '').split('/')[0].substring(0, 3)
 
     if (anterior) doc.line(anterior.x, anterior.y, px, py)
     doc.setFillColor(245, 158, 11)
     doc.circle(px, py, 1.2, 'F')
+    doc.setTextColor(100, 116, 139)
+    doc.setFontSize(4.8)
+    doc.text(mes, px - 3, y + h - 2)
     anterior = { x: px, y: py }
   })
+
+  doc.setTextColor(245, 158, 11)
+  doc.setFontSize(5.2)
+  const ultimo = itens[itens.length - 1]
+  doc.text(`Atual: ${moedaCompacta(ultimo?.Consumo || 0)}`, x + 27, y + 5)
 }
 
 function desenharDonutPDF(doc, cx, cy, raio, dados = []) {
   const total = dados.reduce((acc, item) => acc + Number(item.value || 0), 0)
+  const boxX = cx - 22
+  const boxY = cy - 15
+  doc.setDrawColor(226, 232, 240)
+  doc.roundedRect(boxX, boxY, 52, 30, 2, 2)
+
+  if (!total) {
+    doc.setTextColor(148, 163, 184)
+    doc.setFontSize(6)
+    doc.text('Sem dados', cx - 8, cy + 1)
+    return
+  }
 
   doc.setDrawColor(226, 232, 240)
   doc.circle(cx, cy, raio)
-
-  if (!total) return
 
   let anguloInicio = -90
   dados.forEach((item) => {
@@ -1226,12 +1299,28 @@ function desenharDonutPDF(doc, cx, cy, raio, dados = []) {
     const cor = hexToRgb(item.color)
     doc.setFillColor(cor[0], cor[1], cor[2])
     doc.setDrawColor(cor[0], cor[1], cor[2])
-    doc.circle(cx + Math.cos((anguloInicio + angulo / 2) * Math.PI / 180) * 4, cy + Math.sin((anguloInicio + angulo / 2) * Math.PI / 180) * 4, 2.3, 'F')
+    doc.circle(
+      cx + Math.cos((anguloInicio + angulo / 2) * Math.PI / 180) * 5,
+      cy + Math.sin((anguloInicio + angulo / 2) * Math.PI / 180) * 5,
+      2.4,
+      'F'
+    )
     anguloInicio += angulo
   })
 
   doc.setFillColor(255, 255, 255)
   doc.circle(cx, cy, raio * 0.55, 'F')
+
+  let ly = boxY + 5
+  dados.slice(0, 4).forEach((item) => {
+    const cor = hexToRgb(item.color)
+    doc.setFillColor(cor[0], cor[1], cor[2])
+    doc.rect(boxX + 2, ly - 2.5, 2, 2, 'F')
+    doc.setTextColor(71, 85, 105)
+    doc.setFontSize(4.8)
+    doc.text(`${cortarTexto(item.name, 13)} ${((item.value / total) * 100).toFixed(0)}%`, boxX + 5, ly - 1)
+    ly += 5
+  })
 }
 
 function desenharTabelaPDF(doc, dados, resumo, startY = 130) {
@@ -1338,59 +1427,166 @@ function desenharLinhaTabela(doc, x, y, linha, index, colWidths, rowHeight) {
 
 function desenharSecaoDetalhesPDF(doc, relatorio) {
   const detalhes = relatorio.dados.detalhesImportados || {}
-  const blocos = [
-    ['Detalhe Faturamento', detalhes.faturamento || []],
-    ['Detalhe Estoque / Materiais', detalhes.estoque || []],
-    ['Detalhe Assessoria Técnica', detalhes.assessoria || []]
-  ]
 
-  blocos.forEach(([titulo, itens]) => {
-    if (!itens.length) return
+  desenharDetalheFaturamentoPDF(doc, detalhes.faturamento || [])
+  desenharDetalheEstoquePDF(doc, detalhes.estoque || [])
+  desenharDetalheAssessoriaPDF(doc, detalhes.assessoria || [])
+}
 
-    doc.addPage()
-    configurarPaginaPDF(doc)
-    doc.setTextColor(15, 23, 42)
-    doc.setFontSize(15)
-    doc.text(titulo, 14, 18)
+function desenharDetalheFaturamentoPDF(doc, itens = []) {
+  if (!itens.length) return
 
-    let y = 28
-    const campoValor = titulo.includes('Faturamento') ? 'valorConsiderado' : 'valor'
-    const subtotais = montarSubtotaisDetalhes(itens, 'origem', campoValor)
+  iniciarPaginaDetalhe(doc, 'Detalhamento do Faturamento')
+  let y = 34
 
-    if (subtotais.length > 0) {
-      doc.setFontSize(8)
-      doc.setTextColor(37, 99, 235)
-      doc.text('Subtotais', 14, y)
-      y += 6
+  const subtotais = montarSubtotaisDetalhes(itens, 'origem', 'valorConsiderado')
+  y = desenharSubtotaisPDF(doc, 'Subtotais por origem', subtotais, y)
 
-      subtotais.slice(0, 6).forEach((linha) => {
-        doc.setTextColor(15, 23, 42)
-        doc.text(`${linha[0]}: ${moeda(linha[1])}`, 16, y)
-        y += 5
-      })
+  const colunas = ['Tipo', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Valor Pago']
+  const widths = [21, 21, 24, 48, 25, 28]
+  y = desenharTabelaDetalheCabecalho(doc, colunas, widths, y)
 
-      y += 4
+  itens.forEach((item, index) => {
+    if (y > 274) {
+      desenharRodapeSimples(doc)
+      iniciarPaginaDetalhe(doc, 'Detalhamento do Faturamento')
+      y = desenharTabelaDetalheCabecalho(doc, colunas, widths, 32)
     }
 
-    itens.slice(0, 35).forEach((item, index) => {
-      if (y > 275) {
-        desenharRodapeSimples(doc)
-        doc.addPage()
-        configurarPaginaPDF(doc)
-        y = 18
-      }
-
-      doc.setFillColor(index % 2 === 0 ? 248 : 255, 250, 252)
-      doc.rect(14, y, 182, 8, 'F')
-      doc.setTextColor(15, 23, 42)
-      doc.setFontSize(6.5)
-      const texto = item.descricao || item.processo || item.fonte || 'Registro importado'
-      const valor = item.valorConsiderado || item.valorOriginal || item.valor || 0
-      doc.text(cortarTexto(String(texto), 80), 16, y + 5)
-      doc.text(valorOuTraco(valor), 170, y + 5)
-      y += 8
-    })
+    y = desenharTabelaDetalheLinha(doc, [
+      item.origem,
+      item.data,
+      item.os,
+      item.fonte,
+      item.mnemonico,
+      valorOuTraco(item.valorConsiderado)
+    ], widths, y, index)
   })
+}
+
+function desenharDetalheEstoquePDF(doc, itens = []) {
+  if (!itens.length) return
+
+  iniciarPaginaDetalhe(doc, 'Detalhamento do Estoque / Materiais')
+  let y = 34
+
+  const subtotais = montarSubtotaisDetalhes(itens, 'origem', 'valor')
+  y = desenharSubtotaisPDF(doc, 'Subtotais por categoria', subtotais, y)
+
+  const colunas = ['Origem', 'Data', 'Processo', 'Descrição', 'Qtd.', 'Valor']
+  const widths = [28, 20, 25, 62, 12, 22]
+  y = desenharTabelaDetalheCabecalho(doc, colunas, widths, y)
+
+  itens.forEach((item, index) => {
+    if (y > 274) {
+      desenharRodapeSimples(doc)
+      iniciarPaginaDetalhe(doc, 'Detalhamento do Estoque / Materiais')
+      y = desenharTabelaDetalheCabecalho(doc, colunas, widths, 32)
+    }
+
+    y = desenharTabelaDetalheLinha(doc, [
+      item.origem,
+      item.data,
+      item.processo,
+      item.descricao,
+      item.quantidade,
+      valorOuTraco(item.valor)
+    ], widths, y, index)
+  })
+}
+
+function desenharDetalheAssessoriaPDF(doc, itens = []) {
+  if (!itens.length) return
+
+  iniciarPaginaDetalhe(doc, 'Detalhamento da Assessoria Técnica')
+  let y = 34
+
+  const colunas = ['Planilha', 'Linha', 'Descrição', 'Valor']
+  const widths = [35, 15, 95, 25]
+  y = desenharTabelaDetalheCabecalho(doc, colunas, widths, y)
+
+  itens.forEach((item, index) => {
+    if (y > 274) {
+      desenharRodapeSimples(doc)
+      iniciarPaginaDetalhe(doc, 'Detalhamento da Assessoria Técnica')
+      y = desenharTabelaDetalheCabecalho(doc, colunas, widths, 32)
+    }
+
+    y = desenharTabelaDetalheLinha(doc, [
+      item.planilha,
+      item.linha,
+      item.descricao,
+      valorOuTraco(item.valor)
+    ], widths, y, index)
+  })
+}
+
+function iniciarPaginaDetalhe(doc, titulo) {
+  doc.addPage()
+  configurarPaginaPDF(doc)
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(15)
+  doc.text(titulo, 14, 18)
+  doc.setDrawColor(37, 99, 235)
+  doc.setLineWidth(0.4)
+  doc.line(14, 24, 196, 24)
+}
+
+function desenharSubtotaisPDF(doc, titulo, subtotais, y) {
+  if (!subtotais.length) return y
+
+  doc.setTextColor(37, 99, 235)
+  doc.setFontSize(9)
+  doc.text(titulo, 14, y)
+  y += 5
+
+  subtotais.forEach(([nome, valor]) => {
+    doc.setFillColor(239, 246, 255)
+    doc.setDrawColor(226, 232, 240)
+    doc.rect(14, y, 86, 6, 'FD')
+    doc.setTextColor(15, 23, 42)
+    doc.setFontSize(6.5)
+    doc.text(cortarTexto(nome, 35), 16, y + 4)
+    doc.text(moeda(valor), 74, y + 4)
+    y += 6
+  })
+
+  return y + 4
+}
+
+function desenharTabelaDetalheCabecalho(doc, colunas, widths, y) {
+  const x = 14
+  doc.setFillColor(37, 99, 235)
+  doc.rect(x, y, widths.reduce((a, b) => a + b, 0), 7, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(6.3)
+
+  let colX = x
+  colunas.forEach((col, index) => {
+    doc.text(col, colX + 1.5, y + 4.5)
+    colX += widths[index]
+  })
+
+  return y + 7
+}
+
+function desenharTabelaDetalheLinha(doc, valores, widths, y, index) {
+  const x = 14
+  const altura = 7
+  doc.setFillColor(index % 2 === 0 ? 248 : 255, 250, 252)
+  doc.setDrawColor(226, 232, 240)
+  doc.rect(x, y, widths.reduce((a, b) => a + b, 0), altura, 'FD')
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(5.7)
+
+  let colX = x
+  valores.forEach((valor, colIndex) => {
+    const limite = colIndex === 3 || colIndex === 2 ? 32 : 18
+    doc.text(cortarTexto(String(valor || '-'), limite), colX + 1.5, y + 4.5, { maxWidth: widths[colIndex] - 2 })
+    colX += widths[colIndex]
+  })
+
+  return y + altura
 }
 
 function desenharRodapePDF(doc, relatorio) {
