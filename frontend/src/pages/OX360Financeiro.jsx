@@ -191,12 +191,9 @@ function OX360Financeiro() {
 
       const novosDados = {
         ...dados,
-        importados: {
-          ...dados.importados,
-          ...resultado.importados
-        },
-        detalhesImportados: resultado.detalhesImportados,
-        arquivosImportados: resultado.arquivosImportados
+        importados: somarImportados(dados.importados, resultado.importados),
+        detalhesImportados: mesclarDetalhesImportados(dados.detalhesImportados, resultado.detalhesImportados),
+        arquivosImportados: mesclarArquivosImportados(dados.arquivosImportados, resultado.arquivosImportados)
       }
 
       salvar(novosDados)
@@ -483,6 +480,43 @@ function OX360Financeiro() {
       </section>
     </main>
   )
+}
+
+function somarImportados(atual = {}, novo = {}) {
+  const chaves = new Set([...Object.keys(atual || {}), ...Object.keys(novo || {})])
+  const resultado = {}
+
+  chaves.forEach((key) => {
+    resultado[key] = Number(atual?.[key] || 0) + Number(novo?.[key] || 0)
+  })
+
+  return resultado
+}
+
+function mesclarDetalhesImportados(atual = {}, novo = {}) {
+  return {
+    faturamento: [...(atual.faturamento || []), ...(novo.faturamento || [])],
+    estoque: [...(atual.estoque || []), ...(novo.estoque || [])],
+    assessoria: [...(atual.assessoria || []), ...(novo.assessoria || [])]
+  }
+}
+
+function mesclarArquivosImportados(atual = {}, novo = {}) {
+  const resultado = { ...(atual || {}) }
+
+  Object.entries(novo || {}).forEach(([tipo, info]) => {
+    if (!resultado[tipo]) {
+      resultado[tipo] = info
+      return
+    }
+
+    resultado[tipo] = {
+      nome: `${resultado[tipo].nome}; ${info.nome}`,
+      registros: Number(resultado[tipo].registros || 0) + Number(info.registros || 0)
+    }
+  })
+
+  return resultado
 }
 
 function calcularResumo(dados) {
@@ -931,6 +965,18 @@ function gerarExcelRelatorio(relatorio) {
   XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
 }
 
+function montarSubtotaisDetalhes(lista = [], campoGrupo = 'origem', campoValor = 'valor') {
+  const totais = {}
+
+  ;(lista || []).forEach((item) => {
+    const grupo = item?.[campoGrupo] || 'Não classificado'
+    const valor = Number(item?.[campoValor] || 0)
+    totais[grupo] = Number(totais[grupo] || 0) + valor
+  })
+
+  return Object.entries(totais).map(([nome, valor]) => [nome, arredondar(valor)])
+}
+
 function montarLinhasExcelUnico(relatorio) {
   const linhas = [
     ['OX360 FINANCEIRO - RELATÓRIO EXECUTIVO CDL'],
@@ -946,7 +992,7 @@ function montarLinhasExcelUnico(relatorio) {
     ['Margem Líquida', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`],
     ['Saldo Acumulado', relatorio.saldoAcumulado],
     [],
-    ['DADOS DOS GRÁFICOS'],
+    ['GRÁFICOS - DADOS PARA VISUALIZAÇÃO'],
     ['Mês', 'Receitas', 'Despesas', 'Lucro'],
     ...relatorio.graficos.financeiro.map((item) => [item.mes, item.Receitas, item.Despesas, item.Lucro]),
     [],
@@ -960,6 +1006,10 @@ function montarLinhasExcelUnico(relatorio) {
     ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
     ...montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).map((linha) => linha.slice(0, 6)),
     [],
+    ['SUBTOTAIS DO FATURAMENTO'],
+    ['Origem', 'Valor Considerado'],
+    ...montarSubtotaisDetalhes(relatorio.dados.detalhesImportados?.faturamento, 'origem', 'valorConsiderado'),
+    [],
     ['DETALHE FATURAMENTO'],
     ['Origem', 'Planilha', 'Data', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Original', 'Valor Considerado'],
     ...limitarDetalhes(relatorio.dados.detalhesImportados?.faturamento).map((item) => [
@@ -972,6 +1022,10 @@ function montarLinhasExcelUnico(relatorio) {
       item.valorOriginal,
       item.valorConsiderado
     ]),
+    [],
+    ['SUBTOTAIS DO ESTOQUE / MATERIAIS'],
+    ['Origem', 'Valor'],
+    ...montarSubtotaisDetalhes(relatorio.dados.detalhesImportados?.estoque, 'origem', 'valor'),
     [],
     ['DETALHE ESTOQUE / MATERIAIS'],
     ['Origem', 'Planilha', 'Data', 'Processo', 'Descrição', 'Quantidade', 'Valor'],
@@ -1011,7 +1065,7 @@ async function gerarPDFRelatorio(relatorio) {
     desenharTituloPDF(doc, relatorio)
     desenharCardsPDF(doc, relatorio)
     desenharGraficosPDF(doc, relatorio)
-    desenharTabelaPDF(doc, dados, resumo, 170)
+    desenharTabelaPDF(doc, dados, resumo, 174)
     desenharSecaoDetalhesPDF(doc, relatorio)
     desenharRodapePDF(doc, relatorio)
 
@@ -1089,19 +1143,21 @@ function desenharCardsPDF(doc, relatorio) {
   cards.forEach((card) => {
     doc.setFillColor(248, 250, 252)
     doc.setDrawColor(226, 232, 240)
-    doc.roundedRect(x, y, 34, 28, 3, 3, 'FD')
+    doc.roundedRect(x, y, 34, 31, 3, 3, 'FD')
     doc.setTextColor(...card.cor)
-    doc.setFontSize(7)
+    doc.setFontSize(7.5)
     doc.text(card.titulo, x + 4, y + 9)
     doc.setTextColor(15, 23, 42)
-    doc.setFontSize(9)
-    doc.text(cortarTexto(card.valor, 15), x + 4, y + 19)
+    doc.setFontSize(10.8)
+    doc.setFont(undefined, 'bold')
+    doc.text(cortarTexto(card.valor, 15), x + 4, y + 21)
+    doc.setFont(undefined, 'normal')
     x += 37
   })
 }
 
 function desenharGraficosPDF(doc, relatorio) {
-  const y = 134
+  const y = 136
   desenharBarChartPDF(doc, 14, y, 55, 26, relatorio.graficos.financeiro?.[0])
   desenharLineChartPDF(doc, 77, y, 55, 26, relatorio.graficos.historico || [])
   desenharDonutPDF(doc, 150, y + 13, 12, relatorio.graficos.composicao || [])
@@ -1298,6 +1354,24 @@ function desenharSecaoDetalhesPDF(doc, relatorio) {
     doc.text(titulo, 14, 18)
 
     let y = 28
+    const campoValor = titulo.includes('Faturamento') ? 'valorConsiderado' : 'valor'
+    const subtotais = montarSubtotaisDetalhes(itens, 'origem', campoValor)
+
+    if (subtotais.length > 0) {
+      doc.setFontSize(8)
+      doc.setTextColor(37, 99, 235)
+      doc.text('Subtotais', 14, y)
+      y += 6
+
+      subtotais.slice(0, 6).forEach((linha) => {
+        doc.setTextColor(15, 23, 42)
+        doc.text(`${linha[0]}: ${moeda(linha[1])}`, 16, y)
+        y += 5
+      })
+
+      y += 4
+    }
+
     itens.slice(0, 35).forEach((item, index) => {
       if (y > 275) {
         desenharRodapeSimples(doc)
