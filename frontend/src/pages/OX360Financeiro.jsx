@@ -2,6 +2,21 @@ import { useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  CartesianGrid
+} from 'recharts'
 
 const STORAGE_KEY = 'ox360_financeiro_valores'
 const RAZAO_AREA_PADRAO = 21.92
@@ -97,6 +112,7 @@ function OX360Financeiro() {
   })
 
   const resumo = useMemo(() => calcularResumo(dados), [dados])
+  const dadosGraficos = useMemo(() => montarDadosGraficos(dados, resumo), [dados, resumo])
 
   function salvar(novosDados = dados) {
     setDados(novosDados)
@@ -245,7 +261,7 @@ function OX360Financeiro() {
 
   return (
     <main className="min-h-screen bg-[#020817] text-white p-8 overflow-y-auto">
-      <div className="mb-8 flex items-start justify-between gap-5">
+      <div className="mb-8 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
         <div>
           <p className="text-blue-400 font-semibold">Diretoria</p>
           <h1 className="text-4xl font-bold mt-2">OX360 Financeiro</h1>
@@ -254,7 +270,7 @@ function OX360Financeiro() {
           </p>
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3 xl:items-center">
           <input
             value={dados.mesReferencia}
             onChange={(e) => atualizarCampo('mesReferencia', e.target.value)}
@@ -268,6 +284,14 @@ function OX360Financeiro() {
             className="w-32 bg-slate-950 border border-slate-800 rounded-2xl px-5 py-4 outline-none focus:border-blue-500"
             placeholder="% área"
           />
+
+          <button
+            onClick={() => inputArquivosRef.current?.click()}
+            disabled={importando}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 transition rounded-2xl px-6 py-4 font-bold shadow-lg shadow-blue-500/20 whitespace-nowrap"
+          >
+            {importando ? 'Importando...' : 'Importar Planilhas'}
+          </button>
         </div>
       </div>
 
@@ -279,16 +303,6 @@ function OX360Financeiro() {
         className="hidden"
         onChange={processarArquivos}
       />
-
-      <section className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-8">
-        <button
-          onClick={() => inputArquivosRef.current?.click()}
-          disabled={importando}
-          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-60 transition rounded-2xl p-5 font-bold"
-        >
-          {importando ? 'Importando planilhas...' : 'Importar Planilhas OX360'}
-        </button>
-      </section>
 
       {dados.arquivosImportados?.length > 0 && (
         <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
@@ -360,6 +374,12 @@ function OX360Financeiro() {
         />
       </section>
 
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+        <GraficoReceitasDespesas dados={dadosGraficos.receitasDespesas} />
+        <GraficoConsumoComparativo dados={dadosGraficos.consumoComparativo} />
+        <GraficoComposicaoDespesas dados={dadosGraficos.composicaoDespesas} />
+      </section>
+
       <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
         <div className="flex items-center justify-between gap-4 mb-4">
           <h2 className="text-xl font-bold">Resumo Consolidado - {dados.mesReferencia}</h2>
@@ -384,32 +404,23 @@ function OX360Financeiro() {
         <TabelaResumo dados={dados} resumo={resumo} />
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
-          <h2 className="text-xl font-bold mb-4">Receitas x Despesas</h2>
-          <div className="h-72 flex items-center justify-center text-slate-500">
-            Gráfico será conectado após leitura real das planilhas.
-          </div>
-        </div>
+      <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 mb-8">
+        <h2 className="text-xl font-bold mb-4">Exportações</h2>
 
-        <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
-          <h2 className="text-xl font-bold mb-4">Exportações</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <button
+            onClick={exportarPlanilhaCompleta}
+            className="w-full bg-slate-800 hover:bg-slate-700 transition rounded-xl p-4 font-bold"
+          >
+            Exportar Planilha Completa
+          </button>
 
-          <div className="space-y-3">
-            <button
-              onClick={exportarPlanilhaCompleta}
-              className="w-full bg-slate-800 hover:bg-slate-700 transition rounded-xl p-4 font-bold"
-            >
-              Exportar Planilha Completa
-            </button>
-
-            <button
-              onClick={() => gerarPDFRelatorio(montarRelatorio())}
-              className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
-            >
-              Gerar PDF Completo
-            </button>
-          </div>
+          <button
+            onClick={() => gerarPDFRelatorio(montarRelatorio())}
+            className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
+          >
+            Gerar PDF Completo
+          </button>
         </div>
       </section>
 
@@ -463,6 +474,140 @@ function OX360Financeiro() {
         )}
       </section>
     </main>
+  )
+}
+
+function montarDadosGraficos(dados, resumo) {
+  const historicoAtual = Array.isArray(dados.historico) ? dados.historico : []
+  const ultimoRelatorio = historicoAtual[0]
+
+  const despesasFixas = Number(resumo.saidasFixasRateadas || 0)
+  const despesasManuais = somaObjeto(dados.manuais)
+  const estoque = Number(dados.importados?.estoqueMateriais || 0)
+  const assessoria = Number(dados.importados?.assessoriaTecnica || 0)
+
+  const consumoAtual = estoque + assessoria + despesasManuais
+  const consumoAnterior = ultimoRelatorio
+    ? Number(ultimoRelatorio.despesaTotal || 0)
+    : 0
+
+  return {
+    receitasDespesas: [
+      {
+        nome: dados.mesReferencia || 'Mês atual',
+        Receitas: Number(resumo.entradas || 0),
+        Despesas: Number(resumo.saidas || 0),
+        Lucro: Number(resumo.lucro || 0)
+      }
+    ],
+    consumoComparativo: [
+      {
+        nome: 'Mês anterior',
+        Consumo: consumoAnterior
+      },
+      {
+        nome: 'Mês atual',
+        Consumo: consumoAtual
+      }
+    ],
+    composicaoDespesas: [
+      { name: 'Fixas rateadas', value: despesasFixas },
+      { name: 'Manuais', value: despesasManuais },
+      { name: 'Estoque', value: estoque },
+      { name: 'Assessoria', value: assessoria }
+    ].filter((item) => Number(item.value || 0) > 0)
+  }
+}
+
+function GraficoReceitasDespesas({ dados }) {
+  return (
+    <CardGrafico titulo="Receitas, Despesas e Lucro" subtitulo="Visão financeira consolidada do mês.">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={dados}>
+          <XAxis dataKey="nome" stroke="#94a3b8" fontSize={12} />
+          <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(value) => formatarMoedaCurta(value)} />
+          <Tooltip content={<TooltipFinanceiro />} />
+          <Legend />
+          <Bar dataKey="Receitas" fill="#22c55e" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="Despesas" fill="#ef4444" radius={[8, 8, 0, 0]} />
+          <Bar dataKey="Lucro" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+        </BarChart>
+      </ResponsiveContainer>
+    </CardGrafico>
+  )
+}
+
+function GraficoConsumoComparativo({ dados }) {
+  return (
+    <CardGrafico titulo="Consumo x Mês Anterior" subtitulo="Comparativo com o último relatório gerado.">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={dados}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.15)" />
+          <XAxis dataKey="nome" stroke="#94a3b8" fontSize={12} />
+          <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(value) => formatarMoedaCurta(value)} />
+          <Tooltip content={<TooltipFinanceiro />} />
+          <Line type="monotone" dataKey="Consumo" stroke="#f59e0b" strokeWidth={4} dot={{ r: 6 }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </CardGrafico>
+  )
+}
+
+function GraficoComposicaoDespesas({ dados }) {
+  const CORES = ['#3b82f6', '#ef4444', '#f59e0b', '#22c55e', '#a855f7']
+
+  return (
+    <CardGrafico titulo="Composição das Despesas" subtitulo="Distribuição das saídas por origem.">
+      {dados.length === 0 ? (
+        <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+          Aguardando valores para montar o gráfico.
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={dados}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={45}
+              outerRadius={85}
+              paddingAngle={4}
+            >
+              {dados.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={CORES[index % CORES.length]} />
+              ))}
+            </Pie>
+            <Tooltip content={<TooltipFinanceiro />} />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      )}
+    </CardGrafico>
+  )
+}
+
+function CardGrafico({ titulo, subtitulo, children }) {
+  return (
+    <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6 min-h-[360px]">
+      <h2 className="text-xl font-bold">{titulo}</h2>
+      <p className="text-sm text-slate-500 mt-1 mb-5">{subtitulo}</p>
+      <div className="h-64">{children}</div>
+    </div>
+  )
+}
+
+function TooltipFinanceiro({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+
+  return (
+    <div className="bg-[#020817] border border-blue-500/20 rounded-2xl p-3 shadow-xl">
+      {label && <p className="font-bold text-white mb-2">{label}</p>}
+      {payload.map((item) => (
+        <p key={item.name} className="text-sm" style={{ color: item.color }}>
+          {item.name}: {moeda(item.value)}
+        </p>
+      ))}
+    </div>
   )
 }
 
@@ -1280,6 +1425,13 @@ function numero(valor) {
 
 function arredondar(valor) {
   return Math.round(Number(valor || 0) * 100) / 100
+}
+
+function formatarMoedaCurta(valor) {
+  const numero = Number(valor || 0)
+  if (Math.abs(numero) >= 1000000) return `R$ ${(numero / 1000000).toFixed(1)}M`
+  if (Math.abs(numero) >= 1000) return `R$ ${(numero / 1000).toFixed(0)}k`
+  return `R$ ${numero.toFixed(0)}`
 }
 
 function moeda(valor) {
