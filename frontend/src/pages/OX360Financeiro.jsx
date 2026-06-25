@@ -954,30 +954,305 @@ function TooltipFinanceiro({ active, payload, label }) {
   )
 }
 
-function gerarExcelRelatorio(relatorio) {
-  const wb = XLSX.utils.book_new()
-  const linhas = montarLinhasExcelUnico(relatorio)
-  const ws = XLSX.utils.aoa_to_sheet(linhas)
-  aplicarDesignExcel(ws, linhas)
+async function gerarExcelRelatorio(relatorio) {
+  const painelLogo = await carregarImagem(LOGO_PAINEL_BI_URL)
+  const cdlLogo = await carregarImagem(LOGO_CDL_URL)
+  const html = montarPlanilhaExecutivaHTML(relatorio, painelLogo, cdlLogo)
 
-  ws['!cols'] = [
-    { wch: 42 },
-    { wch: 20 },
-    { wch: 16 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 20 },
-    { wch: 18 },
-    { wch: 36 }
+  const blob = new Blob(['\ufeff', html], {
+    type: 'application/vnd.ms-excel;charset=utf-8;'
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xls`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function montarPlanilhaExecutivaHTML(relatorio, painelLogo, cdlLogo) {
+  const dados = relatorio.dados || {}
+  const resumo = relatorio.resumo || {}
+  const linhasConsolidadas = montarLinhasConsolidadas(dados, resumo)
+  const faturamento = dados.detalhesImportados?.faturamento || []
+  const estoque = dados.detalhesImportados?.estoque || []
+  const assessoria = dados.detalhesImportados?.assessoria || []
+  const historico = relatorio.graficos?.historico || []
+  const composicao = relatorio.graficos?.composicao || []
+
+  return `
+  <html xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="UTF-8" />
+      <style>
+        body { font-family: Arial, sans-serif; background:#ffffff; color:#0f172a; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { border: 1px solid #dbe3ef; padding: 7px 9px; font-size: 12px; vertical-align: middle; }
+        .page { width: 1260px; margin: 0 auto; }
+        .topbar td { border: 0; padding: 14px 8px; }
+        .logo-left { width: 260px; height: auto; }
+        .logo-right { width: 220px; height: auto; }
+        .title { font-size: 26px; font-weight: 800; color:#0b2d5c; text-align:center; letter-spacing:.5px; }
+        .blue-line { height: 4px; background:#2563eb; border:0; }
+        .info-bar td { background:#0f2e5f; color:#fff; font-weight:bold; border-color:#0f2e5f; }
+        .section-title td { background:#0f2e5f; color:#fff; font-weight:bold; font-size:14px; border-color:#0f2e5f; }
+        .subsection td { background:#eaf2ff; color:#1d4ed8; font-weight:bold; }
+        .kpi td { border:0; padding: 8px; }
+        .kpi-card { border:1px solid #cbd5e1; background:#f8fafc; border-radius:10px; padding:16px; }
+        .kpi-title { color:#2563eb; font-weight:bold; font-size:12px; }
+        .kpi-value { color:#0f172a; font-size:22px; font-weight:bold; margin-top:8px; }
+        .kpi-red { color:#dc2626; }
+        .kpi-green { color:#16a34a; }
+        .kpi-purple { color:#7c3aed; }
+        .table-head th { background:#2563eb; color:white; font-weight:bold; text-align:center; }
+        .row-alt { background:#f8fafc; }
+        .total-blue td { background:#0f2e5f; color:white; font-weight:bold; }
+        .total-green td { background:#eafaf0; color:#15803d; font-weight:bold; }
+        .total-red td { background:#fff1f2; color:#dc2626; font-weight:bold; }
+        .money { text-align:right; mso-number-format:'R$ #,##0.00'; }
+        .center { text-align:center; }
+        .right { text-align:right; }
+        .small { font-size:11px; color:#64748b; }
+        .chart-wrap td { border:0; padding:8px; }
+        .chart-card { border:1px solid #cbd5e1; background:#fff; border-radius:8px; padding:10px; height:215px; }
+        .chart-title { font-weight:bold; color:#0f2e5f; text-align:center; margin-bottom:8px; }
+        .bar-area { height:145px; border-left:2px solid #94a3b8; border-bottom:2px solid #94a3b8; padding-left:16px; padding-top:10px; }
+        .bar { display:inline-block; width:54px; vertical-align:bottom; margin:0 22px; border-radius:6px 6px 0 0; text-align:center; color:#0f172a; font-size:11px; }
+        .bar-green { background:#22c55e; }
+        .bar-red { background:#ef4444; }
+        .bar-blue { background:#2563eb; }
+        .line-row { margin:9px 0; }
+        .progress-bg { display:inline-block; width:250px; height:16px; background:#e2e8f0; border-radius:10px; vertical-align:middle; }
+        .progress-fill { display:inline-block; height:16px; border-radius:10px; vertical-align:middle; }
+        .fill-blue { background:#2563eb; }
+        .fill-green { background:#22c55e; }
+        .fill-yellow { background:#f59e0b; }
+        .footer td { border:0; color:#64748b; font-size:11px; padding-top:18px; }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <table class="topbar">
+          <tr>
+            <td style="width:25%">${painelLogo?.data ? `<img class="logo-left" src="${painelLogo.data}" />` : '<b>Painel BI</b><br/><span class="small">Gestão de Indicadores</span>'}</td>
+            <td class="title" style="width:50%">OX360 FINANCEIRO - RELATÓRIO EXECUTIVO CDL</td>
+            <td style="width:25%; text-align:right">${cdlLogo?.data ? `<img class="logo-right" src="${cdlLogo.data}" />` : '<b>CDL</b><br/><span class="small">Laboratório Santos e Vidal</span>'}</td>
+          </tr>
+          <tr><td colspan="3" class="blue-line"></td></tr>
+        </table>
+
+        <table class="info-bar">
+          <tr>
+            <td>MÊS REFERÊNCIA</td>
+            <td>${escapeHTML(relatorio.mesReferencia)}</td>
+            <td>GERADO EM</td>
+            <td>${escapeHTML(relatorio.data)}</td>
+          </tr>
+        </table>
+
+        <br />
+        <table class="section-title"><tr><td>RESUMO EXECUTIVO</td></tr></table>
+        <table class="kpi">
+          <tr>
+            ${kpiExcel('Receita Total', moeda(relatorio.receitaTotal), 'kpi-title')}
+            ${kpiExcel('Despesa Total', moeda(relatorio.despesaTotal), 'kpi-title kpi-red')}
+            ${kpiExcel('Lucro Líquido', moeda(relatorio.lucroLiquido), 'kpi-title kpi-green')}
+            ${kpiExcel('Margem Líquida', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`, 'kpi-title kpi-purple')}
+            ${kpiExcel('Saldo Acumulado', moeda(relatorio.saldoAcumulado), 'kpi-title')}
+          </tr>
+        </table>
+
+        <table class="section-title"><tr><td>GRÁFICOS - DADOS PARA VISUALIZAÇÃO</td></tr></table>
+        <table class="chart-wrap">
+          <tr>
+            <td style="width:33%">${graficoBarrasExcel(relatorio)}</td>
+            <td style="width:33%">${graficoHistoricoExcel(historico)}</td>
+            <td style="width:33%">${graficoComposicaoExcel(composicao)}</td>
+          </tr>
+        </table>
+
+        <table class="section-title"><tr><td>DETALHES DOS GRÁFICOS</td></tr></table>
+        <table>
+          <tr class="table-head"><th>Dados do mês</th><th>Valor</th><th>Histórico 6 meses</th><th>Despesas</th><th>Lucro</th><th>Composição</th><th>Valor</th><th>%</th></tr>
+          ${linhasDetalhesGraficos(relatorio)}
+        </table>
+
+        <br />
+        <table class="section-title"><tr><td>RESUMO CONSOLIDADO</td></tr></table>
+        ${tabelaConsolidadoExcel(linhasConsolidadas)}
+
+        <br />
+        <table class="section-title"><tr><td>SUBTOTAIS DO FATURAMENTO</td></tr></table>
+        ${tabelaSimplesExcel(['Origem', 'Valor Considerado'], montarSubtotaisDetalhes(faturamento, 'origem', 'valorConsiderado'))}
+
+        <br />
+        <table class="section-title"><tr><td>DETALHAMENTO DO FATURAMENTO COMPLETO</td></tr></table>
+        ${tabelaObjetosExcel(
+          ['Origem', 'Planilha', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Faturado', 'Valor Pago', 'Valor Glosado', 'Valor Considerado'],
+          faturamento,
+          ['origem', 'planilha', 'data', 'os', 'fonte', 'mnemonico', 'descricao', 'valorFaturado', 'valorPago', 'valorGlosado', 'valorConsiderado']
+        )}
+
+        <br />
+        <table class="section-title"><tr><td>SUBTOTAIS DO ESTOQUE / MATERIAIS</td></tr></table>
+        ${tabelaSimplesExcel(['Origem', 'Valor'], montarSubtotaisDetalhes(estoque, 'origem', 'valor'))}
+
+        <br />
+        <table class="section-title"><tr><td>DETALHAMENTO DO ESTOQUE / MATERIAIS COMPLETO</td></tr></table>
+        ${tabelaObjetosExcel(
+          ['Origem', 'Planilha', 'Data', 'Processo', 'Descrição', 'Quantidade', 'Valor'],
+          estoque,
+          ['origem', 'planilha', 'data', 'processo', 'descricao', 'quantidade', 'valor']
+        )}
+
+        <br />
+        <table class="section-title"><tr><td>DETALHAMENTO DA ASSESSORIA TÉCNICA COMPLETO</td></tr></table>
+        ${tabelaObjetosExcel(
+          ['Planilha', 'Linha', 'Descrição', 'Valor'],
+          assessoria,
+          ['planilha', 'linha', 'descricao', 'valor']
+        )}
+
+        <table class="footer">
+          <tr>
+            <td>Gerado em: ${escapeHTML(relatorio.data)}</td>
+            <td style="text-align:right">Painel BI • Gestão de Indicadores</td>
+          </tr>
+        </table>
+      </div>
+    </body>
+  </html>`
+}
+
+function kpiExcel(titulo, valor, classeTitulo) {
+  return `
+    <td style="width:20%">
+      <div class="kpi-card">
+        <div class="${classeTitulo}">${escapeHTML(titulo)}</div>
+        <div class="kpi-value">${escapeHTML(valor)}</div>
+      </div>
+    </td>`
+}
+
+function graficoBarrasExcel(relatorio) {
+  const receitas = Number(relatorio.receitaTotal || 0)
+  const despesas = Number(relatorio.despesaTotal || 0)
+  const lucro = Number(relatorio.lucroLiquido || 0)
+  const max = Math.max(receitas, despesas, Math.abs(lucro), 1)
+  const hReceitas = Math.max(12, Math.round((receitas / max) * 120))
+  const hDespesas = Math.max(12, Math.round((despesas / max) * 120))
+  const hLucro = Math.max(12, Math.round((Math.abs(lucro) / max) * 120))
+
+  return `
+    <div class="chart-card">
+      <div class="chart-title">RECEITAS x DESPESAS x LUCRO</div>
+      <div class="bar-area">
+        <span class="bar bar-green" style="height:${hReceitas}px">${moedaCompacta(receitas)}</span>
+        <span class="bar bar-red" style="height:${hDespesas}px">${moedaCompacta(despesas)}</span>
+        <span class="bar bar-blue" style="height:${hLucro}px">${moedaCompacta(lucro)}</span>
+      </div>
+      <div class="center small">Receitas &nbsp;&nbsp;&nbsp; Despesas &nbsp;&nbsp;&nbsp; Lucro</div>
+    </div>`
+}
+
+function graficoHistoricoExcel(historico = []) {
+  const itens = historico.slice(-6)
+  const max = Math.max(...itens.map((i) => Number(i.Consumo || 0)), 1)
+  const linhas = itens.map((item) => {
+    const pct = Math.max(2, Math.round((Number(item.Consumo || 0) / max) * 100))
+    return `<div class="line-row"><b>${escapeHTML(item.mes)}</b> <span class="progress-bg"><span class="progress-fill fill-yellow" style="width:${pct}%"></span></span> ${moedaCompacta(item.Consumo)}</div>`
+  }).join('')
+
+  return `
+    <div class="chart-card">
+      <div class="chart-title">CONSUMO DOS ÚLTIMOS 6 MESES</div>
+      ${linhas || '<div class="small">Sem histórico.</div>'}
+    </div>`
+}
+
+function graficoComposicaoExcel(composicao = []) {
+  const total = composicao.reduce((acc, item) => acc + Number(item.value || 0), 0) || 1
+  return `
+    <div class="chart-card">
+      <div class="chart-title">COMPOSIÇÃO DAS DESPESAS</div>
+      ${composicao.map((item, index) => {
+        const pct = (Number(item.value || 0) / total) * 100
+        const classe = index === 0 ? 'fill-blue' : index === 1 ? 'fill-green' : 'fill-yellow'
+        return `<div class="line-row"><b>${escapeHTML(item.name)}</b><br/><span class="progress-bg"><span class="progress-fill ${classe}" style="width:${Math.max(2, pct)}%"></span></span> ${pct.toFixed(2)}%</div>`
+      }).join('')}
+    </div>`
+}
+
+function linhasDetalhesGraficos(relatorio) {
+  const linhasMes = [
+    ['Receitas', relatorio.receitaTotal],
+    ['Despesas', relatorio.despesaTotal],
+    ['Lucro', relatorio.lucroLiquido]
   ]
+  const hist = relatorio.graficos?.historico || []
+  const comp = relatorio.graficos?.composicao || []
+  const totalComp = comp.reduce((acc, item) => acc + Number(item.value || 0), 0) || 1
+  const tamanho = Math.max(linhasMes.length, hist.length, comp.length)
 
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }
-  ]
+  return Array.from({ length: tamanho }).map((_, i) => {
+    const m = linhasMes[i] || ['', '']
+    const h = hist[i] || {}
+    const c = comp[i] || {}
+    const pct = c.name ? `${((Number(c.value || 0) / totalComp) * 100).toFixed(2)}%` : ''
+    return `<tr class="${i % 2 ? 'row-alt' : ''}"><td>${escapeHTML(m[0])}</td><td class="money">${formatarCelulaExcel(m[1])}</td><td>${escapeHTML(h.mes || '')}</td><td class="money">${formatarCelulaExcel(h.Consumo)}</td><td class="money">${formatarCelulaExcel(h.Lucro)}</td><td>${escapeHTML(c.name || '')}</td><td class="money">${formatarCelulaExcel(c.value)}</td><td class="center">${pct}</td></tr>`
+  }).join('')
+}
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Relatório OX360')
-  XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
+function tabelaConsolidadoExcel(linhas = []) {
+  return `
+    <table>
+      <tr class="table-head"><th>Descrição</th><th>Valor Total</th><th>Razão Área</th><th>Valor da Área</th><th>Saída</th><th>Entrada</th></tr>
+      ${linhas.map((linha, i) => {
+        const tipo = linha[6]
+        const classe = tipo === 'secaoAzul' ? 'subsection' : tipo === 'secaoVermelha' ? 'total-red' : tipo === 'secaoVerde' ? 'total-green' : tipo === 'totalGeral' ? 'total-blue' : i % 2 ? 'row-alt' : ''
+        return `<tr class="${classe}">${linha.slice(0, 6).map((v, idx) => `<td class="${idx > 0 ? 'money' : ''}">${idx === 0 || idx === 2 ? escapeHTML(v) : formatarCelulaExcel(v)}</td>`).join('')}</tr>`
+      }).join('')}
+    </table>`
+}
+
+function tabelaSimplesExcel(headers, linhas = []) {
+  return `
+    <table>
+      <tr class="table-head">${headers.map((h) => `<th>${escapeHTML(h)}</th>`).join('')}</tr>
+      ${linhas.map((linha, i) => `<tr class="${i % 2 ? 'row-alt' : ''}">${linha.map((v, idx) => `<td class="${idx > 0 ? 'money' : ''}">${idx > 0 ? formatarCelulaExcel(v) : escapeHTML(v)}</td>`).join('')}</tr>`).join('')}
+    </table>`
+}
+
+function tabelaObjetosExcel(headers, lista = [], keys = []) {
+  return `
+    <table>
+      <tr class="table-head">${headers.map((h) => `<th>${escapeHTML(h)}</th>`).join('')}</tr>
+      ${(lista || []).map((item, i) => `<tr class="${i % 2 ? 'row-alt' : ''}">${keys.map((key) => `<td>${isValorMonetario(key) ? formatarCelulaExcel(item?.[key]) : escapeHTML(item?.[key] ?? '')}</td>`).join('')}</tr>`).join('')}
+    </table>`
+}
+
+function isValorMonetario(key) {
+  return ['valor', 'valorFaturado', 'valorPago', 'valorGlosado', 'valorConsiderado'].includes(key)
+}
+
+function formatarCelulaExcel(valor) {
+  if (valor === null || valor === undefined || valor === '') return '-'
+  if (typeof valor === 'number') return moeda(valor)
+  return escapeHTML(valor)
+}
+
+function escapeHTML(valor) {
+  return String(valor ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
 }
 
 
