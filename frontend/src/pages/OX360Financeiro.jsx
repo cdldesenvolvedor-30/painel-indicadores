@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
-import 'jspdf-autotable'
 
 const STORAGE_KEY = 'ox360_financeiro_valores'
 const RAZAO_AREA_PADRAO = 21.92
@@ -187,9 +186,14 @@ function OX360Financeiro() {
     toast.success('Planilha Excel exportada com sucesso.')
   }
 
-  function baixarRelatorio(relatorio) {
+  function baixarRelatorioPDF(relatorio) {
     gerarPDFRelatorio(relatorio)
-    toast.success('Relatório baixado novamente.')
+    toast.success('PDF baixado novamente.')
+  }
+
+  function baixarRelatorioExcel(relatorio) {
+    gerarExcelRelatorio(relatorio)
+    toast.success('Excel baixado novamente.')
   }
 
   return (
@@ -327,7 +331,7 @@ function OX360Financeiro() {
             </button>
 
             <button
-               onClick={() => gerarPDFRelatorio(montarRelatorio())}
+              onClick={() => gerarPDFRelatorio(montarRelatorio())}
               className="w-full bg-purple-600 hover:bg-purple-500 transition rounded-xl p-4 font-bold"
             >
               Gerar PDF Completo
@@ -346,7 +350,7 @@ function OX360Financeiro() {
             {dados.historico.map((relatorio) => (
               <div
                 key={relatorio.id}
-                className="flex items-center justify-between bg-slate-950/70 border border-slate-800 rounded-2xl p-4"
+                className="flex items-center justify-between gap-4 bg-slate-950/70 border border-slate-800 rounded-2xl p-4"
               >
                 <div>
                   <p className="font-bold">{relatorio.mesReferencia}</p>
@@ -356,16 +360,16 @@ function OX360Financeiro() {
                   </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <button
-                    onClick={() => gerarPDFRelatorio(relatorio)}
+                    onClick={() => baixarRelatorioPDF(relatorio)}
                     className="bg-blue-600 hover:bg-blue-500 transition rounded-xl px-4 py-2 font-bold"
                   >
                     Baixar PDF
                   </button>
 
                   <button
-                    onClick={() => gerarExcelRelatorio(relatorio)}
+                    onClick={() => baixarRelatorioExcel(relatorio)}
                     className="bg-slate-700 hover:bg-slate-600 transition rounded-xl px-4 py-2 font-bold"
                   >
                     Baixar Excel
@@ -418,6 +422,7 @@ function gerarExcelRelatorio(relatorio) {
     ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
     ...consolidado
   ])
+
   wsConsolidado['!cols'] = [
     { wch: 36 },
     { wch: 18 },
@@ -426,8 +431,8 @@ function gerarExcelRelatorio(relatorio) {
     { wch: 18 },
     { wch: 18 }
   ]
-  XLSX.utils.book_append_sheet(wb, wsConsolidado, 'Consolidado')
 
+  XLSX.utils.book_append_sheet(wb, wsConsolidado, 'Consolidado')
   XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
 }
 
@@ -444,81 +449,181 @@ function adicionarAba(wb, nomeAba, campos, valores = {}) {
 
 function gerarPDFRelatorio(relatorio) {
   const doc = new jsPDF('p', 'mm', 'a4')
+  const nome = `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`
 
-  doc.setFillColor(2, 8, 23)
-  doc.rect(0, 0, 210, 297, 'F')
+  const largura = 210
+  const altura = 297
+  const margem = 14
+  let y = 18
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(22)
-  doc.text('OX360 Financeiro', 16, 22)
+  function paginaBase() {
+    doc.setFillColor(2, 8, 23)
+    doc.rect(0, 0, largura, altura, 'F')
 
-  doc.setTextColor(96, 165, 250)
-  doc.setFontSize(11)
-  doc.text('Relatório Executivo CDL', 16, 30)
-
-  doc.setTextColor(203, 213, 225)
-  doc.text(`Mês referência: ${relatorio.mesReferencia}`, 16, 40)
-  doc.text(`Gerado em: ${relatorio.data}`, 16, 47)
-
-  const cards = [
-    ['Receita Total', moeda(relatorio.receitaTotal)],
-    ['Despesa Total', moeda(relatorio.despesaTotal)],
-    ['Lucro Líquido', moeda(relatorio.lucroLiquido)],
-    ['Margem Líquida', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`],
-    ['Saldo Acumulado', moeda(relatorio.saldoAcumulado)]
-  ]
-
-  let x = 16
-  let y = 60
-
-  cards.forEach((card, index) => {
-    if (index === 3) {
-      x = 16
-      y += 27
-    }
-
-    doc.setFillColor(15, 23, 42)
-    doc.roundedRect(x, y, 55, 20, 4, 4, 'F')
+    doc.setFillColor(37, 99, 235)
+    doc.roundedRect(margem, 10, 14, 14, 3, 3, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.text('BI', margem + 4, 19)
 
     doc.setTextColor(148, 163, 184)
     doc.setFontSize(8)
-    doc.text(card[0], x + 4, y + 7)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Painel BI • Gestão de Indicadores', margem + 20, 16)
+
+    doc.setDrawColor(30, 41, 59)
+    doc.line(margem, 27, largura - margem, 27)
+
+    doc.setTextColor(100, 116, 139)
+    doc.setFontSize(8)
+    doc.text(`Gerado em ${relatorio.data}`, margem, 287)
+    doc.text('CDL • OX360 Financeiro', 145, 287)
+  }
+
+  function novaPagina() {
+    doc.addPage()
+    paginaBase()
+    y = 38
+  }
+
+  function precisaEspaco(espaco) {
+    if (y + espaco > 274) novaPagina()
+  }
+
+  function tituloSecao(titulo) {
+    precisaEspaco(14)
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.text(titulo, margem, y)
+    y += 8
+  }
+
+  function card(x, yCard, w, h, titulo, valor, destaque = false) {
+    doc.setFillColor(destaque ? 30 : 15, destaque ? 64 : 23, destaque ? 175 : 42)
+    doc.roundedRect(x, yCard, w, h, 4, 4, 'F')
+
+    doc.setTextColor(203, 213, 225)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'normal')
+    doc.text(titulo, x + 4, yCard + 7)
 
     doc.setTextColor(255, 255, 255)
-    doc.setFontSize(12)
-    doc.text(card[1], x + 4, y + 15)
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.text(String(valor), x + 4, yCard + 16)
+  }
 
-    x += 60
-  })
+  function linhaTabela(colunas, larguras, opcoes = {}) {
+    precisaEspaco(8)
 
-  autoTable(doc, {
-    startY: 118,
-    head: [['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada']],
-    body: montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).map((linha) => [
+    const xInicial = margem
+    let x = xInicial
+    const alturaLinha = opcoes.header ? 8 : 7
+
+    if (opcoes.header) {
+      doc.setFillColor(37, 99, 235)
+    } else if (opcoes.total) {
+      doc.setFillColor(15, 23, 42)
+    } else {
+      doc.setFillColor(2, 8, 23)
+    }
+
+    doc.rect(xInicial, y - 5.5, larguras.reduce((a, b) => a + b, 0), alturaLinha, 'F')
+
+    doc.setDrawColor(30, 41, 59)
+    doc.line(xInicial, y + 2, xInicial + larguras.reduce((a, b) => a + b, 0), y + 2)
+
+    colunas.forEach((texto, index) => {
+      doc.setTextColor(opcoes.header ? 255 : 226, opcoes.header ? 255 : 232, opcoes.header ? 255 : 240)
+      doc.setFontSize(opcoes.header ? 7 : 6.7)
+      doc.setFont('helvetica', opcoes.header || opcoes.total ? 'bold' : 'normal')
+
+      const textoFinal = String(texto ?? '-')
+      const alinhadoDireita = index > 0
+      const limite = larguras[index] - 3
+      const linhas = doc.splitTextToSize(textoFinal, limite)
+      const linha = linhas[0]
+
+      if (alinhadoDireita) {
+        doc.text(linha, x + larguras[index] - 2, y, { align: 'right' })
+      } else {
+        doc.text(linha, x + 2, y)
+      }
+
+      x += larguras[index]
+    })
+
+    y += alturaLinha
+  }
+
+  paginaBase()
+
+  doc.setTextColor(96, 165, 250)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'bold')
+  doc.text('Diretoria', margem, 40)
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(24)
+  doc.text('OX360 Financeiro', margem, 52)
+
+  doc.setTextColor(203, 213, 225)
+  doc.setFontSize(10)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`Mês referência: ${relatorio.mesReferencia}`, margem, 61)
+
+  y = 76
+
+  card(14, y, 35, 22, 'Receita Total', moeda(relatorio.receitaTotal), true)
+  card(53, y, 35, 22, 'Despesa Total', moeda(relatorio.despesaTotal))
+  card(92, y, 35, 22, 'Lucro Líquido', moeda(relatorio.lucroLiquido), relatorio.lucroLiquido >= 0)
+  card(131, y, 28, 22, 'Margem', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`)
+  card(163, y, 33, 22, 'Saldo', moeda(relatorio.saldoAcumulado))
+
+  y += 38
+
+  tituloSecao('Resumo consolidado')
+
+  const larguras = [55, 28, 22, 28, 28, 28]
+  linhaTabela(['Descrição', 'Valor Total', 'Razão', 'Valor Área', 'Saída', 'Entrada'], larguras, { header: true })
+
+  montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).forEach((linha) => {
+    const total = ['TOTAL', 'RESULTADO DO MÊS', 'SALDO ACUMULADO'].includes(linha[0])
+
+    linhaTabela([
       linha[0],
-      moeda(linha[1]),
+      linha[1] ? moeda(linha[1]) : '-',
       linha[2],
       linha[3] ? moeda(linha[3]) : '-',
       linha[4] ? moeda(linha[4]) : '-',
       linha[5] ? moeda(linha[5]) : '-'
-    ]),
-    theme: 'grid',
-    styles: {
-      fontSize: 7,
-      textColor: [226, 232, 240],
-      fillColor: [15, 23, 42],
-      lineColor: [51, 65, 85]
-    },
-    headStyles: {
-      fillColor: [37, 99, 235],
-      textColor: [255, 255, 255]
-    },
-    alternateRowStyles: {
-      fillColor: [2, 8, 23]
-    }
+    ], larguras, { total })
   })
 
-  doc.save(`OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`)
+  novaPagina()
+  tituloSecao('Valores fixos configuráveis')
+  linhaTabela(['Descrição', 'Valor'], [130, 50], { header: true })
+  CAMPOS_FIXOS.forEach((campo) => {
+    linhaTabela([campo.nome, moeda(relatorio.dados.fixos?.[campo.key] || 0)], [130, 50])
+  })
+
+  y += 8
+  tituloSecao('Valores manuais do mês')
+  linhaTabela(['Descrição', 'Valor'], [130, 50], { header: true })
+  CAMPOS_MANUAIS.forEach((campo) => {
+    linhaTabela([campo.nome, moeda(relatorio.dados.manuais?.[campo.key] || 0)], [130, 50])
+  })
+
+  y += 8
+  tituloSecao('Valores importados')
+  linhaTabela(['Descrição', 'Valor'], [130, 50], { header: true })
+  CAMPOS_IMPORTADOS.forEach((campo) => {
+    linhaTabela([campo.nome, moeda(relatorio.dados.importados?.[campo.key] || 0)], [130, 50])
+  })
+
+  doc.save(nome)
 }
 
 function montarLinhasConsolidadas(dados, resumo) {
@@ -621,16 +726,7 @@ function TabelaResumo({ dados, resumo }) {
   )
 }
 
-function PainelCampos({
-  titulo,
-  subtitulo,
-  campos,
-  grupo,
-  dados,
-  onChange,
-  editavel,
-  acao
-}) {
+function PainelCampos({ titulo, subtitulo, campos, grupo, dados, onChange, editavel, acao }) {
   return (
     <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
       <div className="flex items-start justify-between gap-3 mb-1">
