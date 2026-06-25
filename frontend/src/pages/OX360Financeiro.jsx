@@ -469,8 +469,9 @@ function configurarPaginaPDF(doc) {
 }
 
 function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
-  if (painelLogo) {
-    doc.addImage(painelLogo, 'PNG', 14, 10, 58, 18)
+  // Cabeçalho branco, com logos sem distorção e alinhamento estilo relatório executivo
+  if (painelLogo?.dataUrl) {
+    adicionarImagemProporcional(doc, painelLogo, 14, 10, 58, 22, 'left')
   } else {
     doc.setFillColor(37, 99, 235)
     doc.roundedRect(14, 10, 14, 14, 3, 3, 'F')
@@ -485,8 +486,8 @@ function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
     doc.text('Gestão de Indicadores', 32, 23)
   }
 
-  if (cdlLogo) {
-    doc.addImage(cdlLogo, 'PNG', 158, 10, 38, 16)
+  if (cdlLogo?.dataUrl) {
+    adicionarImagemProporcional(doc, cdlLogo, 154, 8, 42, 24, 'right')
   } else {
     doc.setTextColor(37, 99, 235)
     doc.setFontSize(20)
@@ -497,8 +498,8 @@ function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
   }
 
   doc.setDrawColor(37, 99, 235)
-  doc.setLineWidth(0.5)
-  doc.line(14, 34, 196, 34)
+  doc.setLineWidth(0.6)
+  doc.line(14, 36, 196, 36)
 }
 
 function desenharTituloPDF(doc, relatorio) {
@@ -891,15 +892,35 @@ function carregarImagem(url) {
     img.crossOrigin = 'anonymous'
     img.onload = () => {
       const canvas = document.createElement('canvas')
-      canvas.width = img.width
-      canvas.height = img.height
+      canvas.width = img.naturalWidth || img.width
+      canvas.height = img.naturalHeight || img.height
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0)
-      resolve(canvas.toDataURL('image/png'))
+      resolve({
+        dataUrl: canvas.toDataURL('image/png'),
+        width: canvas.width,
+        height: canvas.height
+      })
     }
     img.onerror = () => resolve(null)
     img.src = url
   })
+}
+
+function adicionarImagemProporcional(doc, imagem, x, y, maxWidth, maxHeight, alinhamento = 'left') {
+  const proporcao = imagem.width / imagem.height
+  let largura = maxWidth
+  let altura = largura / proporcao
+
+  if (altura > maxHeight) {
+    altura = maxHeight
+    largura = altura * proporcao
+  }
+
+  const posX = alinhamento === 'right' ? x + maxWidth - largura : x
+  const posY = y + (maxHeight - altura) / 2
+
+  doc.addImage(imagem.dataUrl, 'PNG', posX, posY, largura, altura)
 }
 
 export default OX360Financeiro
