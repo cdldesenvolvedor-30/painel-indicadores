@@ -1356,7 +1356,6 @@ function desenharLineChartPDF(doc, x, y, w, h, itens = []) {
   doc.setLineWidth(0.2)
   ;[0, 0.5, 1].forEach((p) => {
     const gy = chartY + chartH * p
-    doc.line(chartX, gy, chartX + chartW, gy)
   })
 
   doc.setDrawColor(148, 163, 184)
