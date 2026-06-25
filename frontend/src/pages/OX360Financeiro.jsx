@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import 'jspdf-autotable'
 
 const STORAGE_KEY = 'ox360_financeiro_valores'
 const RAZAO_AREA_PADRAO = 21.92
