@@ -958,125 +958,89 @@ function gerarExcelRelatorio(relatorio) {
   const wb = XLSX.utils.book_new()
   const linhas = montarLinhasExcelUnico(relatorio)
   const ws = XLSX.utils.aoa_to_sheet(linhas)
+  aplicarDesignExcel(ws, linhas)
 
   ws['!cols'] = [
-    { wch: 34 },
-    { wch: 18 },
+    { wch: 42 },
+    { wch: 20 },
     { wch: 16 },
+    { wch: 20 },
+    { wch: 20 },
+    { wch: 20 },
     { wch: 18 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 32 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 18 }
+    { wch: 36 }
   ]
 
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 1 } },
-    { s: { r: 3, c: 2 }, e: { r: 3, c: 3 } },
-    { s: { r: 3, c: 4 }, e: { r: 3, c: 5 } },
-    { s: { r: 3, c: 6 }, e: { r: 3, c: 7 } },
-    { s: { r: 3, c: 8 }, e: { r: 3, c: 10 } }
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } }
   ]
-
-  ws['!freeze'] = { xSplit: 0, ySplit: 8 }
-  ws['!autofilter'] = { ref: 'A10:K10' }
-
-  Object.keys(ws).forEach((cellRef) => {
-    if (!cellRef.startsWith('!') && typeof ws[cellRef].v === 'number') {
-      ws[cellRef].z = 'R$ #,##0.00'
-    }
-  })
 
   XLSX.utils.book_append_sheet(wb, ws, 'Relatório OX360')
   XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
 }
 
-function montarLinhasExcelUnico(relatorio) {
-  const resumo = relatorio.resumo || {}
-  const dados = relatorio.dados || {}
-  const detalhes = dados.detalhesImportados || {}
 
-  const linhas = [
-    ['OX360 FINANCEIRO - RELATÓRIO EXECUTIVO CDL'],
-    ['Painel BI • Gestão de Indicadores'],
-    [],
-    ['RECEITA TOTAL', relatorio.receitaTotal, 'DESPESA TOTAL', relatorio.despesaTotal, 'LUCRO LÍQUIDO', relatorio.lucroLiquido, 'MARGEM LÍQUIDA', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`, 'SALDO ACUMULADO', relatorio.saldoAcumulado],
-    [],
-    ['Mês Referência', relatorio.mesReferencia, '', 'Gerado em', relatorio.data, '', 'Razão Área', `${dados.razaoArea}%`],
-    [],
-    ['DADOS DOS GRÁFICOS'],
-    ['Receitas x Despesas x Lucro'],
-    ['Mês', 'Receitas', 'Despesas', 'Lucro'],
-    ...relatorio.graficos.financeiro.map((item) => [item.mes, item.Receitas, item.Despesas, item.Lucro]),
-    [],
-    ['Consumo dos últimos 6 meses'],
-    ['Mês', 'Consumo', 'Lucro'],
-    ...relatorio.graficos.historico.map((item) => [item.mes, item.Consumo, item.Lucro]),
-    [],
-    ['Composição das Despesas'],
-    ['Categoria', 'Valor', '% Total'],
-    ...relatorio.graficos.composicao.map((item) => [
-      item.name,
-      item.value,
-      resumo.saidas > 0 ? `${((Number(item.value || 0) / resumo.saidas) * 100).toFixed(2)}%` : '0%'
-    ]),
-    [],
-    ['RESUMO CONSOLIDADO'],
-    ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
-    ...montarLinhasConsolidadas(dados, resumo).map((linha) => linha.slice(0, 6)),
-    [],
-    ['SUBTOTAIS DO FATURAMENTO'],
-    ['Origem', 'Valor Considerado'],
-    ...montarSubtotaisDetalhes(detalhes.faturamento, 'origem', 'valorConsiderado'),
-    [],
-    ['RELATÓRIO COMPLETO - FATURAMENTO'],
-    ['Origem', 'Planilha', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Faturado', 'Valor Pago', 'Valor Glosado', 'Valor Considerado'],
-    ...limitarDetalhes(detalhes.faturamento).map((item) => [
-      item.origem,
-      item.planilha,
-      item.data,
-      item.os,
-      item.fonte,
-      item.mnemonico,
-      item.descricao,
-      item.valorFaturado,
-      item.valorPago,
-      item.valorGlosado,
-      item.valorConsiderado
-    ]),
-    [],
-    ['SUBTOTAIS DO ESTOQUE / MATERIAIS'],
-    ['Origem', 'Valor'],
-    ...montarSubtotaisDetalhes(detalhes.estoque, 'origem', 'valor'),
-    [],
-    ['RELATÓRIO COMPLETO - ESTOQUE / MATERIAIS'],
-    ['Origem', 'Planilha', 'Data', 'Processo', 'Descrição', 'Quantidade', 'Valor'],
-    ...limitarDetalhes(detalhes.estoque).map((item) => [
-      item.origem,
-      item.planilha,
-      item.data,
-      item.processo,
-      item.descricao,
-      item.quantidade,
-      item.valor
-    ]),
-    [],
-    ['RELATÓRIO COMPLETO - ASSESSORIA TÉCNICA'],
-    ['Planilha', 'Linha', 'Descrição', 'Valor'],
-    ...limitarDetalhes(detalhes.assessoria).map((item) => [
-      item.planilha,
-      item.linha,
-      item.descricao,
-      item.valor
-    ])
-  ]
+function aplicarDesignExcel(ws, linhas) {
+  const range = XLSX.utils.decode_range(ws['!ref'])
 
-  return linhas
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellRef = XLSX.utils.encode_cell({ r: R, c: C })
+      const cell = ws[cellRef]
+      if (!cell) continue
+
+      const valor = String(cell.v || '')
+      const isTitulo = R === 0
+      const isSubtitulo = R === 1
+      const isSecao = [
+        'RESUMO EXECUTIVO',
+        'GRÁFICOS - DADOS PARA VISUALIZAÇÃO',
+        'RESUMO CONSOLIDADO',
+        'SUBTOTAIS DO FATURAMENTO',
+        'DETALHE FATURAMENTO',
+        'SUBTOTAIS DO ESTOQUE / MATERIAIS',
+        'DETALHE ESTOQUE / MATERIAIS',
+        'DETALHE ASSESSORIA TÉCNICA'
+      ].includes(valor)
+      const isCabecalho = ['Indicador', 'Mês', 'Histórico 6 meses', 'Composição das Despesas', 'Descrição', 'Origem', 'Tipo', 'Planilha'].includes(valor)
+      const isTotal = valor.startsWith('TOTAL') || valor.startsWith('Total') || valor.includes('LUCRO') || valor.includes('SALDO')
+
+      cell.s = {
+        font: {
+          name: 'Arial',
+          sz: isTitulo ? 18 : isSecao ? 13 : isCabecalho ? 11 : 10,
+          bold: isTitulo || isSecao || isCabecalho || isTotal,
+          color: { rgb: isTitulo || isSecao || isCabecalho ? 'FFFFFF' : '0F172A' }
+        },
+        fill: {
+          fgColor: {
+            rgb: isTitulo ? '1D4ED8' : isSubtitulo ? 'DBEAFE' : isSecao ? '2563EB' : isCabecalho ? '1E40AF' : isTotal ? 'EAF2FF' : 'FFFFFF'
+          }
+        },
+        alignment: {
+          vertical: 'center',
+          horizontal: C === 0 ? 'left' : 'center',
+          wrapText: true
+        },
+        border: {
+          top: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          bottom: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+          right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+        }
+      }
+    }
+  }
+
+  ws['!rows'] = linhas.map((linha, index) => {
+    const primeiro = String(linha?.[0] || '')
+    if (index === 0) return { hpt: 28 }
+    if (primeiro.startsWith('DETALHE') || primeiro.startsWith('SUBTOTAIS') || primeiro === 'RESUMO CONSOLIDADO') return { hpt: 24 }
+    return { hpt: 20 }
+  })
+
+  ws['!autofilter'] = { ref: 'A1:H1' }
 }
 
 function montarSubtotaisDetalhes(lista = [], campoGrupo = 'origem', campoValor = 'valor') {
@@ -1182,7 +1146,7 @@ async function gerarPDFRelatorio(relatorio) {
     desenharTituloPDF(doc, relatorio)
     desenharCardsPDF(doc, relatorio)
     desenharGraficosPDF(doc, relatorio)
-    desenharTabelaPDF(doc, dados, resumo, 202)
+    desenharTabelaPDF(doc, dados, resumo, 198)
     desenharSecaoDetalhesPDF(doc, relatorio)
     desenharRodapePDF(doc, relatorio)
 
@@ -1199,8 +1163,9 @@ function configurarPaginaPDF(doc) {
 }
 
 function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
-  if (painelLogo) {
-    adicionarImagemContida(doc, painelLogo, 14, 10, 72, 24, 'left')
+  if (painelLogo?.data) {
+    const logoPainel = ajustarImagemProporcional(painelLogo, 64, 24)
+    doc.addImage(painelLogo.data, 'PNG', 14, 11, logoPainel.w, logoPainel.h)
   } else {
     doc.setFillColor(37, 99, 235)
     doc.roundedRect(14, 11, 16, 16, 4, 4, 'F')
@@ -1215,8 +1180,9 @@ function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
     doc.text('Gestão de Indicadores', 35, 25)
   }
 
-  if (cdlLogo) {
-    adicionarImagemContida(doc, cdlLogo, 146, 9, 50, 27, 'right')
+  if (cdlLogo?.data) {
+    const logoCDL = ajustarImagemProporcional(cdlLogo, 44, 24)
+    doc.addImage(cdlLogo.data, 'PNG', 196 - logoCDL.w, 10, logoCDL.w, logoCDL.h)
   } else {
     doc.setTextColor(37, 99, 235)
     doc.setFontSize(20)
@@ -1227,8 +1193,21 @@ function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
   }
 
   doc.setDrawColor(37, 99, 235)
-  doc.setLineWidth(0.65)
+  doc.setLineWidth(0.6)
   doc.line(14, 44, 196, 44)
+}
+
+function ajustarImagemProporcional(img, maxW, maxH) {
+  const proporcao = img.width / img.height
+  let w = maxW
+  let h = w / proporcao
+
+  if (h > maxH) {
+    h = maxH
+    w = h * proporcao
+  }
+
+  return { w, h }
 }
 
 function desenharTituloPDF(doc, relatorio) {
@@ -1260,32 +1239,32 @@ function desenharCardsPDF(doc, relatorio) {
   cards.forEach((card) => {
     doc.setFillColor(248, 250, 252)
     doc.setDrawColor(226, 232, 240)
-    doc.setLineWidth(0.6)
     doc.roundedRect(x, y, 34, 31, 3, 3, 'FD')
     doc.setTextColor(...card.cor)
-    doc.setFontSize(7.2)
+    doc.setFontSize(7.5)
     doc.text(card.titulo, x + 4, y + 9)
     doc.setTextColor(15, 23, 42)
-    doc.setFontSize(11.8)
+    doc.setFontSize(10.8)
     doc.setFont(undefined, 'bold')
-    doc.text(cortarTexto(card.valor, 15), x + 4, y + 22)
+    doc.text(cortarTexto(card.valor, 15), x + 4, y + 21)
     doc.setFont(undefined, 'normal')
     x += 37
   })
 }
 
 function desenharGraficosPDF(doc, relatorio) {
-  const y = 140
-  const h = 42
+  const yTitulo = 135
+  const yGrafico = 142
+
   doc.setTextColor(15, 23, 42)
   doc.setFontSize(8.5)
-  doc.text('Receitas x Despesas x Lucro', 14, y - 4)
-  doc.text('Consumo dos últimos 6 meses', 77, y - 4)
-  doc.text('Composição das despesas', 140, y - 4)
+  doc.text('Receitas x Despesas x Lucro', 14, yTitulo)
+  doc.text('Consumo dos últimos 6 meses', 77, yTitulo)
+  doc.text('Composição das despesas', 140, yTitulo)
 
-  desenharBarChartPDF(doc, 14, y, 56, h, relatorio.graficos.financeiro?.[0])
-  desenharLineChartPDF(doc, 77, y, 56, h, relatorio.graficos.historico || [])
-  desenharDonutPDF(doc, 140, y, 56, h, relatorio.graficos.composicao || [])
+  desenharBarChartPDF(doc, 14, yGrafico, 56, 35, relatorio.graficos.financeiro?.[0])
+  desenharLineChartPDF(doc, 77, yGrafico, 56, 35, relatorio.graficos.historico || [])
+  desenharComposicaoPDF(doc, 140, yGrafico, 56, 35, relatorio.graficos.composicao || [])
 }
 
 function desenharBarChartPDF(doc, x, y, w, h, item = {}) {
@@ -1296,130 +1275,121 @@ function desenharBarChartPDF(doc, x, y, w, h, item = {}) {
   ]
 
   const max = Math.max(...dados.map((d) => Math.abs(d.valor)), 1)
-  const chartX = x + 12
-  const chartY = y + 8
-  const chartW = w - 17
-  const chartH = h - 19
-  const baseY = chartY + chartH
+  const chartX = x + 9
+  const chartY = y + 6
+  const chartW = w - 14
+  const chartH = h - 14
 
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.6)
-  doc.roundedRect(x, y, w, h, 2, 2)
-
-  doc.setDrawColor(148, 163, 184)
-  doc.line(chartX, chartY, chartX, baseY)
-  doc.line(chartX, baseY, chartX + chartW, baseY)
+  desenharCaixaGrafico(doc, x, y, w, h)
+  desenharEixosGrafico(doc, chartX, chartY, chartW, chartH)
 
   doc.setTextColor(100, 116, 139)
-  doc.setFontSize(5)
-  doc.text(moedaCompacta(max), x + 2, chartY + 2)
-  doc.text('0', x + 8, baseY)
+  doc.setFontSize(4.6)
+  doc.text(moedaCompacta(max), x + 1.5, chartY + 2)
+  doc.text('0', x + 4.5, chartY + chartH)
 
   dados.forEach((dado, index) => {
-    const bh = Math.max(2.5, Math.abs(dado.valor) / max * (chartH - 3))
-    const bx = chartX + 8 + index * 12
-    const by = baseY - bh
+    const bh = Math.max(2, Math.abs(dado.valor) / max * (chartH - 4))
+    const bx = chartX + 7 + index * 13
+    const by = chartY + chartH - bh
+
     doc.setFillColor(...dado.cor)
-    doc.roundedRect(bx, by, 7, bh, 1, 1, 'F')
+    doc.roundedRect(bx, by, 7, bh, 1.3, 1.3, 'F')
+
     doc.setTextColor(...dado.cor)
-    doc.setFontSize(5)
-    doc.text(moedaCompacta(dado.valor), bx - 3, by - 2)
-    doc.setTextColor(...dado.cor)
-    doc.setFontSize(4.7)
-    doc.text(dado.nome.substring(0, 4), bx - 1, y + h - 3)
+    doc.setFontSize(4.6)
+    doc.text(moedaCompacta(dado.valor), bx - 3, by - 1.8)
+    doc.text(dado.nome.substring(0, 4), bx - 1, y + h - 2.4)
   })
 }
 
 function desenharLineChartPDF(doc, x, y, w, h, itens = []) {
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.6)
-  doc.roundedRect(x, y, w, h, 2, 2)
+  desenharCaixaGrafico(doc, x, y, w, h)
 
-  if (itens.length < 1) {
+  if (!itens.length) {
     doc.setTextColor(148, 163, 184)
     doc.setFontSize(6)
-    doc.text('Sem histórico suficiente', x + 10, y + 21)
+    doc.text('Sem histórico suficiente', x + 10, y + 18)
     return
   }
 
-  const chartX = x + 12
-  const chartY = y + 8
-  const chartW = w - 17
-  const chartH = h - 18
+  const chartX = x + 10
+  const chartY = y + 6
+  const chartW = w - 15
+  const chartH = h - 14
   const valores = itens.map((item) => Number(item.Consumo || 0))
   const max = Math.max(...valores, 1)
   const min = Math.min(...valores, 0)
   const range = Math.max(max - min, 1)
-  const baseY = chartY + chartH
 
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.2)
-  ;[0, 0.5, 1].forEach((p) => {
-    const gy = chartY + chartH * p
-  })
-
-  doc.setDrawColor(148, 163, 184)
-  doc.setLineWidth(0.5)
-  doc.line(chartX, chartY, chartX, baseY)
-  doc.line(chartX, baseY, chartX + chartW, baseY)
+  desenharEixosGrafico(doc, chartX, chartY, chartW, chartH)
 
   doc.setTextColor(100, 116, 139)
-  doc.setFontSize(4.8)
-  doc.text(moedaCompacta(max), x + 2, chartY + 2)
-  doc.text(moedaCompacta(min), x + 2, baseY)
+  doc.setFontSize(4.6)
+  doc.text(moedaCompacta(max), x + 1.5, chartY + 2)
+  doc.text(moedaCompacta(min), x + 1.5, chartY + chartH)
 
   doc.setDrawColor(245, 158, 11)
-  doc.setLineWidth(0.75)
+  doc.setLineWidth(0.7)
 
   let anterior = null
   itens.forEach((item, index) => {
     const px = chartX + (index / Math.max(itens.length - 1, 1)) * chartW
-    const py = baseY - ((Number(item.Consumo || 0) - min) / range) * chartH
+    const py = chartY + chartH - ((Number(item.Consumo || 0) - min) / range) * chartH
     const mes = String(item.mes || '').split('/')[0].substring(0, 3)
 
     if (anterior) doc.line(anterior.x, anterior.y, px, py)
     doc.setFillColor(245, 158, 11)
-    doc.circle(px, py, 1.1, 'F')
+    doc.circle(px, py, 1.3, 'F')
     doc.setTextColor(100, 116, 139)
-    doc.setFontSize(4.7)
-    doc.text(mes, px - 3, y + h - 3)
+    doc.setFontSize(4.5)
+    doc.text(mes, px - 3, y + h - 2.4)
     anterior = { x: px, y: py }
   })
-
-  const ultimo = itens[itens.length - 1]
-  doc.setTextColor(245, 158, 11)
-  doc.setFontSize(5.1)
-  doc.text(`Atual: ${moedaCompacta(ultimo?.Consumo || 0)}`, x + 18, y + 5)
 }
 
-function desenharDonutPDF(doc, x, y, w, h, dados = []) {
-  const total = dados.reduce((acc, item) => acc + Number(item.value || 0), 0)
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.6)
-  doc.roundedRect(x, y, w, h, 2, 2)
+function desenharComposicaoPDF(doc, x, y, w, h, dados = []) {
+  desenharCaixaGrafico(doc, x, y, w, h)
 
+  const total = dados.reduce((acc, item) => acc + Number(item.value || 0), 0)
   if (!total) {
     doc.setTextColor(148, 163, 184)
     doc.setFontSize(6)
-    doc.text('Sem dados', x + 21, y + 21)
+    doc.text('Sem dados de despesas', x + 10, y + 18)
     return
   }
 
-  let currentY = y + 7
+  let atualY = y + 7
   dados.slice(0, 5).forEach((item) => {
-    const percentual = (Number(item.value || 0) / total) * 100
-    const cor = hexToRgb(item.color)
-    const barW = Math.max(3, (w - 24) * (percentual / 100))
+    const percentual = Number(item.value || 0) / total
+    const cor = hexToRgb(item.color || '#2563eb')
+    const barraW = Math.max(2, (w - 27) * percentual)
 
-    doc.setFillColor(cor[0], cor[1], cor[2])
-    doc.roundedRect(x + 4, currentY, barW, 3.2, 0.8, 0.8, 'F')
     doc.setTextColor(71, 85, 105)
     doc.setFontSize(4.8)
-    doc.text(`${cortarTexto(item.name, 16)} ${percentual.toFixed(1)}%`, x + 4, currentY + 6.3)
-    doc.setTextColor(15, 23, 42)
-    doc.text(moedaCompacta(item.value), x + w - 19, currentY + 2.8)
-    currentY += 7.4
+    doc.text(cortarTexto(item.name, 18), x + 4, atualY)
+    doc.text(`${(percentual * 100).toFixed(1)}%`, x + w - 13, atualY)
+
+    doc.setFillColor(226, 232, 240)
+    doc.roundedRect(x + 4, atualY + 2, w - 12, 2.3, 0.8, 0.8, 'F')
+    doc.setFillColor(cor[0], cor[1], cor[2])
+    doc.roundedRect(x + 4, atualY + 2, barraW, 2.3, 0.8, 0.8, 'F')
+
+    atualY += 6
   })
+}
+
+function desenharCaixaGrafico(doc, x, y, w, h) {
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.45)
+  doc.roundedRect(x, y, w, h, 2.5, 2.5)
+}
+
+function desenharEixosGrafico(doc, chartX, chartY, chartW, chartH) {
+  doc.setDrawColor(148, 163, 184)
+  doc.setLineWidth(0.45)
+  doc.line(chartX, chartY, chartX, chartY + chartH)
+  doc.line(chartX, chartY + chartH, chartX + chartW, chartY + chartH)
 }
 
 function desenharTabelaPDF(doc, dados, resumo, startY = 130) {
@@ -1966,7 +1936,7 @@ function carregarImagem(url) {
       const ctx = canvas.getContext('2d')
       ctx.drawImage(img, 0, 0)
       resolve({
-        dataUrl: canvas.toDataURL('image/png'),
+        data: canvas.toDataURL('image/png'),
         width: canvas.width,
         height: canvas.height
       })
@@ -1974,26 +1944,6 @@ function carregarImagem(url) {
     img.onerror = () => resolve(null)
     img.src = url
   })
-}
-
-function adicionarImagemContida(doc, imagem, x, y, maxW, maxH, align = 'left') {
-  if (!imagem?.dataUrl || !imagem?.width || !imagem?.height) return
-
-  const ratio = imagem.width / imagem.height
-  let w = maxW
-  let h = w / ratio
-
-  if (h > maxH) {
-    h = maxH
-    w = h * ratio
-  }
-
-  let px = x
-  if (align === 'right') px = x + maxW - w
-  if (align === 'center') px = x + (maxW - w) / 2
-
-  const py = y + (maxH - h) / 2
-  doc.addImage(imagem.dataUrl, 'PNG', px, py, w, h)
 }
 
 export default OX360Financeiro
