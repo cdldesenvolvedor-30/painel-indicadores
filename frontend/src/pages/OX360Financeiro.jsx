@@ -6,7 +6,7 @@ import jsPDF from 'jspdf'
 const STORAGE_KEY = 'ox360_financeiro_valores'
 const RAZAO_AREA_PADRAO = 21.92
 
-const LOGO_PAINEL_BI_URL = '/logo-painel-bi.png'
+const LOGO_PAINEL_BI_URL = '/logo-painel.png'
 const LOGO_CDL_URL = '/logo-cdl.png'
 
 const CAMPOS_FIXOS = [
@@ -470,7 +470,7 @@ function configurarPaginaPDF(doc) {
 
 function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
   if (painelLogo) {
-    doc.addImage(painelLogo, 'PNG', 14, 11, 38, 18)
+    doc.addImage(painelLogo, 'PNG', 14, 10, 58, 18)
   } else {
     doc.setFillColor(37, 99, 235)
     doc.roundedRect(14, 10, 14, 14, 3, 3, 'F')
@@ -486,7 +486,7 @@ function desenharCabecalhoPDF(doc, painelLogo, cdlLogo) {
   }
 
   if (cdlLogo) {
-    doc.addImage(cdlLogo, 'PNG', 160, 9, 36, 20)
+    doc.addImage(cdlLogo, 'PNG', 158, 10, 38, 16)
   } else {
     doc.setTextColor(37, 99, 235)
     doc.setFontSize(20)
