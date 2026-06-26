@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
+import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import {
   ResponsiveContainer,
@@ -954,129 +956,524 @@ function TooltipFinanceiro({ active, payload, label }) {
   )
 }
 
-function gerarExcelRelatorio(relatorio) {
-  const wb = XLSX.utils.book_new()
-  const linhas = montarLinhasExcelUnico(relatorio)
-  const ws = XLSX.utils.aoa_to_sheet(linhas)
+async function gerarExcelRelatorio(relatorio) {
+  try {
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = 'Painel BI - Gestão de Indicadores'
+    workbook.lastModifiedBy = 'Painel BI'
+    workbook.created = new Date()
+    workbook.modified = new Date()
 
-  ws['!cols'] = [
-    { wch: 34 },
-    { wch: 18 },
-    { wch: 16 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 32 },
-    { wch: 18 },
-    { wch: 18 },
-    { wch: 18 }
-  ]
+    const ws = workbook.addWorksheet('Relatório Executivo', {
+      properties: {
+        tabColor: { argb: 'FF2563EB' },
+        defaultRowHeight: 22
+      },
+      views: [
+        {
+          state: 'frozen',
+          ySplit: 6,
+          showGridLines: false
+        }
+      ],
+      pageSetup: {
+        paperSize: 9,
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: {
+          left: 0.25,
+          right: 0.25,
+          top: 0.35,
+          bottom: 0.35,
+          header: 0.2,
+          footer: 0.2
+        }
+      }
+    })
 
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 10 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } },
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 1 } },
-    { s: { r: 3, c: 2 }, e: { r: 3, c: 3 } },
-    { s: { r: 3, c: 4 }, e: { r: 3, c: 5 } },
-    { s: { r: 3, c: 6 }, e: { r: 3, c: 7 } },
-    { s: { r: 3, c: 8 }, e: { r: 3, c: 10 } }
-  ]
+    ws.columns = [
+      { key: 'A', width: 22 },
+      { key: 'B', width: 22 },
+      { key: 'C', width: 18 },
+      { key: 'D', width: 18 },
+      { key: 'E', width: 18 },
+      { key: 'F', width: 18 },
+      { key: 'G', width: 18 },
+      { key: 'H', width: 22 },
+      { key: 'I', width: 22 },
+      { key: 'J', width: 18 }
+    ]
 
-  ws['!freeze'] = { xSplit: 0, ySplit: 8 }
-  ws['!autofilter'] = { ref: 'A10:K10' }
+    const azulEscuro = 'FF0F2F5F'
+    const azul = 'FF2563EB'
+    const azulClaro = 'FFEFF6FF'
+    const cinzaClaro = 'FFF8FAFC'
+    const cinzaBorda = 'FFD9E2EC'
+    const texto = 'FF0F172A'
+    const subtitulo = 'FF475569'
+    const verde = 'FF16A34A'
+    const vermelho = 'FFDC2626'
+    const roxo = 'FF7C3AED'
+    const amarelo = 'FFF59E0B'
 
-  Object.keys(ws).forEach((cellRef) => {
-    if (!cellRef.startsWith('!') && typeof ws[cellRef].v === 'number') {
-      ws[cellRef].z = 'R$ #,##0.00'
+    const money = 'R$ #,##0.00;[Red]-R$ #,##0.00;R$ -'
+    const percent = '0.00%'
+
+    const thinBorder = {
+      top: { style: 'thin', color: { argb: cinzaBorda } },
+      left: { style: 'thin', color: { argb: cinzaBorda } },
+      bottom: { style: 'thin', color: { argb: cinzaBorda } },
+      right: { style: 'thin', color: { argb: cinzaBorda } }
     }
-  })
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Relatório OX360')
-  XLSX.writeFile(wb, `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`)
+    const mediumBlueBorder = {
+      top: { style: 'medium', color: { argb: azul } },
+      left: { style: 'medium', color: { argb: azul } },
+      bottom: { style: 'medium', color: { argb: azul } },
+      right: { style: 'medium', color: { argb: azul } }
+    }
+
+    function merge(ref) {
+      try { ws.mergeCells(ref) } catch {}
+    }
+
+    function fillRange(ref, fill, border = thinBorder) {
+      const [start, end] = ref.split(':')
+      const startCell = ws.getCell(start)
+      const endCell = ws.getCell(end || start)
+      for (let r = startCell.row; r <= endCell.row; r++) {
+        for (let c = startCell.col; c <= endCell.col; c++) {
+          const cell = ws.getCell(r, c)
+          cell.fill = fill
+          cell.border = border
+        }
+      }
+    }
+
+    function styleRange(ref, style = {}) {
+      const [start, end] = ref.split(':')
+      const startCell = ws.getCell(start)
+      const endCell = ws.getCell(end || start)
+      for (let r = startCell.row; r <= endCell.row; r++) {
+        for (let c = startCell.col; c <= endCell.col; c++) {
+          Object.assign(ws.getCell(r, c), style)
+        }
+      }
+    }
+
+    function sectionTitle(row, title, color = azulEscuro) {
+      merge(`A${row}:J${row}`)
+      const cell = ws.getCell(`A${row}`)
+      cell.value = title
+      cell.font = { name: 'Segoe UI', bold: true, size: 12, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }
+      cell.alignment = { vertical: 'middle' }
+      ws.getRow(row).height = 23
+      fillRange(`A${row}:J${row}`, cell.fill, mediumBlueBorder)
+    }
+
+    function headerRow(row, values, fromCol = 1, toCol = values.length) {
+      values.forEach((value, index) => {
+        const cell = ws.getCell(row, fromCol + index)
+        cell.value = value
+        cell.font = { name: 'Segoe UI', bold: true, size: 10, color: { argb: 'FFFFFFFF' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: azul } }
+        cell.alignment = { horizontal: index === 0 ? 'left' : 'center', vertical: 'middle' }
+        cell.border = thinBorder
+      })
+      ws.getRow(row).height = 21
+    }
+
+    function normalRow(row, values, options = {}) {
+      values.forEach((value, index) => {
+        const cell = ws.getCell(row, index + 1)
+        cell.value = value
+        cell.font = { name: 'Segoe UI', size: 9, color: { argb: options.color || texto }, bold: !!options.bold }
+        cell.alignment = {
+          horizontal: index === 0 ? 'left' : 'center',
+          vertical: 'middle',
+          wrapText: true
+        }
+        cell.border = thinBorder
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: options.fill || (row % 2 === 0 ? 'FFFFFFFF' : cinzaClaro) }
+        }
+        if (typeof value === 'number') cell.numFmt = money
+      })
+    }
+
+    async function addImageFromPublic(url, range, ext = 'png') {
+      try {
+        const base64 = await imagemPublicParaBase64(url)
+        if (!base64) return false
+        const id = workbook.addImage({ base64, extension: ext })
+        ws.addImage(id, range)
+        return true
+      } catch (error) {
+        console.warn(`Não foi possível inserir a logo ${url}`, error)
+        return false
+      }
+    }
+
+    // ===== Cabeçalho com logos embutidas =====
+    ws.getRow(1).height = 28
+    ws.getRow(2).height = 25
+    ws.getRow(3).height = 8
+    ws.getRow(4).height = 8
+
+    merge('C1:H2')
+    ws.getCell('C1').value = 'OX360 FINANCEIRO - RELATÓRIO EXECUTIVO CDL'
+    ws.getCell('C1').font = { name: 'Segoe UI', bold: true, size: 22, color: { argb: azulEscuro } }
+    ws.getCell('C1').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+
+    const logoPainelOk = await addImageFromPublic('/logo-painel.png', {
+      tl: { col: 0.2, row: 0.15 },
+      ext: { width: 260, height: 62 }
+    })
+    const logoCdlOk = await addImageFromPublic('/logo-cdl.png', {
+      tl: { col: 8.0, row: 0.12 },
+      ext: { width: 170, height: 62 }
+    })
+
+    if (!logoPainelOk) {
+      merge('A1:B2')
+      ws.getCell('A1').value = '▣ Painel BI\nGestão de Indicadores'
+      ws.getCell('A1').font = { name: 'Segoe UI', bold: true, size: 12, color: { argb: azulEscuro } }
+      ws.getCell('A1').alignment = { vertical: 'middle', wrapText: true }
+    }
+
+    if (!logoCdlOk) {
+      merge('I1:J2')
+      ws.getCell('I1').value = 'CDL\nLaboratório Santos e Vidal'
+      ws.getCell('I1').font = { name: 'Segoe UI', bold: true, size: 14, color: { argb: azulEscuro } }
+      ws.getCell('I1').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    }
+
+    fillRange('A4:J4', { type: 'pattern', pattern: 'solid', fgColor: { argb: azul } }, {
+      top: { style: 'thin', color: { argb: azul } },
+      bottom: { style: 'thin', color: { argb: azul } }
+    })
+
+    // ===== Faixa de metadados =====
+    merge('A5:B5')
+    merge('C5:D5')
+    merge('E5:F5')
+    merge('G5:J5')
+    ws.getCell('A5').value = 'MÊS REFERÊNCIA'
+    ws.getCell('C5').value = relatorio.mesReferencia
+    ws.getCell('E5').value = 'GERADO EM'
+    ws.getCell('G5').value = relatorio.data
+    ;['A5', 'C5', 'E5', 'G5'].forEach((addr, i) => {
+      const cell = ws.getCell(addr)
+      cell.font = { name: 'Segoe UI', bold: i % 2 === 0, size: 10, color: { argb: 'FFFFFFFF' } }
+      cell.alignment = { horizontal: i % 2 === 0 ? 'center' : 'left', vertical: 'middle' }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: azulEscuro } }
+    })
+    fillRange('A5:J5', { type: 'pattern', pattern: 'solid', fgColor: { argb: azulEscuro } }, mediumBlueBorder)
+
+    // ===== KPI cards =====
+    sectionTitle(7, 'RESUMO EXECUTIVO')
+    const kpis = [
+      { titulo: 'RECEITA TOTAL', valor: relatorio.receitaTotal, cor: azul, icone: '💰' },
+      { titulo: 'DESPESA TOTAL', valor: relatorio.despesaTotal, cor: vermelho, icone: '💳' },
+      { titulo: 'LUCRO LÍQUIDO', valor: relatorio.lucroLiquido, cor: verde, icone: '📈' },
+      { titulo: 'MARGEM LÍQUIDA', valor: Number(relatorio.margemLiquida || 0) / 100, cor: roxo, icone: '%' },
+      { titulo: 'SALDO ACUMULADO', valor: relatorio.saldoAcumulado, cor: azul, icone: '🏦' }
+    ]
+
+    const cardRanges = [
+      ['A8:B11'],
+      ['C8:D11'],
+      ['E8:F11'],
+      ['G8:H11'],
+      ['I8:J11']
+    ]
+
+    kpis.forEach((kpi, index) => {
+      const range = cardRanges[index][0]
+      merge(range)
+      fillRange(range, { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }, mediumBlueBorder)
+      const cell = ws.getCell(range.split(':')[0])
+      cell.value = `${kpi.icone}  ${kpi.titulo}\n\n${index === 3 ? `${Number(relatorio.margemLiquida || 0).toFixed(2)}%` : moeda(kpi.valor)}`
+      cell.font = { name: 'Segoe UI', bold: true, size: 12, color: { argb: kpi.cor } }
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    })
+    ;[8, 9, 10, 11].forEach((r) => { ws.getRow(r).height = 24 })
+
+    // ===== Gráficos simulados com dados =====
+    sectionTitle(13, 'GRÁFICOS - DADOS PARA VISUALIZAÇÃO')
+    const grafStart = 14
+    desenharBlocoGraficoExcel(ws, grafStart, 1, 'RECEITAS x DESPESAS x LUCRO', relatorio.graficos.financeiro, azul, verde, vermelho)
+    desenharBlocoHistoricoExcel(ws, grafStart, 4, 'CONSUMO DOS ÚLTIMOS 6 MESES', relatorio.graficos.historico, amarelo)
+    desenharBlocoComposicaoExcel(ws, grafStart, 7, 'COMPOSIÇÃO DAS DESPESAS', relatorio.graficos.composicao, verde, azul)
+
+    // ===== Detalhes dos gráficos =====
+    sectionTitle(27, 'DETALHES DOS GRÁFICOS')
+    headerRow(28, ['DADOS DO MÊS', 'VALOR', '', 'HISTÓRICO 6 MESES', 'CONSUMO', 'LUCRO', '', 'COMPOSIÇÃO', 'VALOR', '%'])
+    const compTotal = relatorio.graficos.composicao.reduce((acc, item) => acc + Number(item.value || 0), 0) || 1
+    const financeiro = relatorio.graficos.financeiro?.[0] || {}
+    const detalhesGraficos = [
+      ['Receitas', financeiro.Receitas || 0, '', relatorio.graficos.historico?.[0]?.mes || '', relatorio.graficos.historico?.[0]?.Consumo || 0, relatorio.graficos.historico?.[0]?.Lucro || 0, '', relatorio.graficos.composicao?.[0]?.name || '', relatorio.graficos.composicao?.[0]?.value || 0, (relatorio.graficos.composicao?.[0]?.value || 0) / compTotal],
+      ['Despesas', financeiro.Despesas || 0, '', relatorio.graficos.historico?.[1]?.mes || '', relatorio.graficos.historico?.[1]?.Consumo || 0, relatorio.graficos.historico?.[1]?.Lucro || 0, '', relatorio.graficos.composicao?.[1]?.name || '', relatorio.graficos.composicao?.[1]?.value || 0, (relatorio.graficos.composicao?.[1]?.value || 0) / compTotal],
+      ['Lucro', financeiro.Lucro || 0, '', relatorio.graficos.historico?.[2]?.mes || '', relatorio.graficos.historico?.[2]?.Consumo || 0, relatorio.graficos.historico?.[2]?.Lucro || 0, '', relatorio.graficos.composicao?.[2]?.name || '', relatorio.graficos.composicao?.[2]?.value || 0, (relatorio.graficos.composicao?.[2]?.value || 0) / compTotal]
+    ]
+    detalhesGraficos.forEach((row, i) => normalRow(29 + i, row))
+    ;['B29:B31', 'E29:F31', 'I29:I31'].forEach((ref) => styleRange(ref, { numFmt: money }))
+    styleRange('J29:J31', { numFmt: percent })
+
+    // ===== Resumo consolidado =====
+    let row = 34
+    sectionTitle(row, 'RESUMO CONSOLIDADO')
+    row++
+    headerRow(row, ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'])
+    row++
+    montarLinhasConsolidadas(relatorio.dados, relatorio.resumo).forEach((linha) => {
+      const tipo = linha[6]
+      const fill = tipo === 'secaoAzul'
+        ? azulClaro
+        : tipo === 'secaoVermelha'
+          ? 'FFFFF1F2'
+          : tipo === 'secaoVerde'
+            ? 'FFF0FDF4'
+            : tipo === 'total'
+              ? 'FFE0ECFF'
+              : undefined
+      normalRow(row, linha.slice(0, 6), {
+        fill,
+        bold: ['secaoAzul', 'secaoVermelha', 'secaoVerde', 'total'].includes(tipo),
+        color: tipo === 'secaoVermelha' ? vermelho : tipo === 'secaoVerde' ? verde : tipo === 'secaoAzul' ? azul : texto
+      })
+      row++
+    })
+    styleRange(`B35:F${row}`, { numFmt: money })
+
+    row += 2
+
+    // ===== Detalhamento Faturamento =====
+    row = adicionarTabelaDetalheExcel(ws, row, {
+      titulo: 'DETALHAMENTO DO FATURAMENTO',
+      subtitulo: 'Base completa importada da planilha de faturamento. Convênio usa VL. PAGO como valor considerado.',
+      headers: ['Origem', 'Planilha', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Procedimento', 'Vl. Fat', 'Vl. Pago', 'Vl. Glosado'],
+      rows: (relatorio.dados.detalhesImportados?.faturamento || []).map((item) => [
+        item.origem,
+        item.planilha,
+        item.data,
+        item.os,
+        item.fonte,
+        item.mnemonico,
+        item.descricao,
+        item.valorFaturado,
+        item.valorPago,
+        item.valorGlosado
+      ]),
+      subtotais: montarSubtotaisDetalhes(relatorio.dados.detalhesImportados?.faturamento, 'origem', 'valorConsiderado'),
+      color: azulEscuro,
+      moneyCols: [8, 9, 10]
+    })
+
+    // ===== Detalhamento Estoque =====
+    row = adicionarTabelaDetalheExcel(ws, row + 2, {
+      titulo: 'DETALHAMENTO DO ESTOQUE / MATERIAIS',
+      subtitulo: 'Base completa de materiais, limpeza, almoxarifado e demais despesas identificadas.',
+      headers: ['Origem', 'Planilha', 'Data', 'Processo', 'Descrição', 'Quantidade', 'Valor'],
+      rows: (relatorio.dados.detalhesImportados?.estoque || []).map((item) => [
+        item.origem,
+        item.planilha,
+        item.data,
+        item.processo,
+        item.descricao,
+        item.quantidade,
+        item.valor
+      ]),
+      subtotais: montarSubtotaisDetalhes(relatorio.dados.detalhesImportados?.estoque, 'origem', 'valor'),
+      color: 'FF15803D',
+      moneyCols: [7]
+    })
+
+    // ===== Detalhamento Assessoria =====
+    row = adicionarTabelaDetalheExcel(ws, row + 2, {
+      titulo: 'DETALHAMENTO DA ASSESSORIA TÉCNICA',
+      subtitulo: 'Base completa importada da planilha de acompanhamento mensal.',
+      headers: ['Planilha', 'Linha', 'Descrição', 'Valor'],
+      rows: (relatorio.dados.detalhesImportados?.assessoria || []).map((item) => [
+        item.planilha,
+        item.linha,
+        item.descricao,
+        item.valor
+      ]),
+      subtotais: montarSubtotaisDetalhes(relatorio.dados.detalhesImportados?.assessoria, 'planilha', 'valor'),
+      color: 'FF7C3AED',
+      moneyCols: [4]
+    })
+
+    // ===== Rodapé =====
+    row += 2
+    merge(`A${row}:J${row}`)
+    ws.getCell(`A${row}`).value = `Gerado pelo Painel BI • ${relatorio.data}`
+    ws.getCell(`A${row}`).font = { name: 'Segoe UI', italic: true, size: 9, color: { argb: subtitulo } }
+    ws.getCell(`A${row}`).alignment = { horizontal: 'center' }
+
+    ws.autoFilter = { from: 'A35', to: `F${Math.max(35, row - 1)}` }
+    ws.properties.outlineLevelRow = 1
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    saveAs(
+      new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }),
+      `OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.xlsx`
+    )
+  } catch (error) {
+    console.error(error)
+    toast.error('Erro ao gerar Excel profissional. Verifique o console.')
+  }
 }
 
-function montarLinhasExcelUnico(relatorio) {
-  const resumo = relatorio.resumo || {}
-  const dados = relatorio.dados || {}
-  const detalhes = dados.detalhesImportados || {}
+function desenharBlocoGraficoExcel(ws, row, col, titulo, dados, azul, verde, vermelho) {
+  const start = ws.getCell(row, col).address
+  const end = ws.getCell(row + 10, col + 2).address
+  ws.mergeCells(start + ':' + end)
+  const box = ws.getCell(start)
+  box.value = `${titulo}\n\n${(dados || []).map((item) => `Receitas: ${moeda(item.Receitas)}    Despesas: ${moeda(item.Despesas)}    Lucro: ${moeda(item.Lucro)}`).join('\n')}`
+  box.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF0F2F5F' } }
+  box.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  box.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } }
+  box.border = {
+    top: { style: 'medium', color: { argb: 'FFD9E2EC' } },
+    left: { style: 'medium', color: { argb: 'FFD9E2EC' } },
+    bottom: { style: 'medium', color: { argb: 'FFD9E2EC' } },
+    right: { style: 'medium', color: { argb: 'FFD9E2EC' } }
+  }
+}
 
-  const linhas = [
-    ['OX360 FINANCEIRO - RELATÓRIO EXECUTIVO CDL'],
-    ['Painel BI • Gestão de Indicadores'],
-    [],
-    ['RECEITA TOTAL', relatorio.receitaTotal, 'DESPESA TOTAL', relatorio.despesaTotal, 'LUCRO LÍQUIDO', relatorio.lucroLiquido, 'MARGEM LÍQUIDA', `${Number(relatorio.margemLiquida || 0).toFixed(2)}%`, 'SALDO ACUMULADO', relatorio.saldoAcumulado],
-    [],
-    ['Mês Referência', relatorio.mesReferencia, '', 'Gerado em', relatorio.data, '', 'Razão Área', `${dados.razaoArea}%`],
-    [],
-    ['DADOS DOS GRÁFICOS'],
-    ['Receitas x Despesas x Lucro'],
-    ['Mês', 'Receitas', 'Despesas', 'Lucro'],
-    ...relatorio.graficos.financeiro.map((item) => [item.mes, item.Receitas, item.Despesas, item.Lucro]),
-    [],
-    ['Consumo dos últimos 6 meses'],
-    ['Mês', 'Consumo', 'Lucro'],
-    ...relatorio.graficos.historico.map((item) => [item.mes, item.Consumo, item.Lucro]),
-    [],
-    ['Composição das Despesas'],
-    ['Categoria', 'Valor', '% Total'],
-    ...relatorio.graficos.composicao.map((item) => [
-      item.name,
-      item.value,
-      resumo.saidas > 0 ? `${((Number(item.value || 0) / resumo.saidas) * 100).toFixed(2)}%` : '0%'
-    ]),
-    [],
-    ['RESUMO CONSOLIDADO'],
-    ['Descrição', 'Valor Total', 'Razão Área', 'Valor da Área', 'Saída', 'Entrada'],
-    ...montarLinhasConsolidadas(dados, resumo).map((linha) => linha.slice(0, 6)),
-    [],
-    ['SUBTOTAIS DO FATURAMENTO'],
-    ['Origem', 'Valor Considerado'],
-    ...montarSubtotaisDetalhes(detalhes.faturamento, 'origem', 'valorConsiderado'),
-    [],
-    ['RELATÓRIO COMPLETO - FATURAMENTO'],
-    ['Origem', 'Planilha', 'Data', 'OS', 'Fonte', 'Mnemônico', 'Descrição', 'Valor Faturado', 'Valor Pago', 'Valor Glosado', 'Valor Considerado'],
-    ...limitarDetalhes(detalhes.faturamento).map((item) => [
-      item.origem,
-      item.planilha,
-      item.data,
-      item.os,
-      item.fonte,
-      item.mnemonico,
-      item.descricao,
-      item.valorFaturado,
-      item.valorPago,
-      item.valorGlosado,
-      item.valorConsiderado
-    ]),
-    [],
-    ['SUBTOTAIS DO ESTOQUE / MATERIAIS'],
-    ['Origem', 'Valor'],
-    ...montarSubtotaisDetalhes(detalhes.estoque, 'origem', 'valor'),
-    [],
-    ['RELATÓRIO COMPLETO - ESTOQUE / MATERIAIS'],
-    ['Origem', 'Planilha', 'Data', 'Processo', 'Descrição', 'Quantidade', 'Valor'],
-    ...limitarDetalhes(detalhes.estoque).map((item) => [
-      item.origem,
-      item.planilha,
-      item.data,
-      item.processo,
-      item.descricao,
-      item.quantidade,
-      item.valor
-    ]),
-    [],
-    ['RELATÓRIO COMPLETO - ASSESSORIA TÉCNICA'],
-    ['Planilha', 'Linha', 'Descrição', 'Valor'],
-    ...limitarDetalhes(detalhes.assessoria).map((item) => [
-      item.planilha,
-      item.linha,
-      item.descricao,
-      item.valor
-    ])
-  ]
+function desenharBlocoHistoricoExcel(ws, row, col, titulo, dados, amarelo) {
+  const start = ws.getCell(row, col).address
+  const end = ws.getCell(row + 10, col + 2).address
+  ws.mergeCells(start + ':' + end)
+  const ultimos = (dados || []).slice(-6)
+  const box = ws.getCell(start)
+  box.value = `${titulo}\n\n${ultimos.map((item) => `${item.mes}: Consumo ${moeda(item.Consumo)} | Lucro ${moeda(item.Lucro)}`).join('\n')}`
+  box.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF92400E' } }
+  box.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  box.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } }
+  box.border = {
+    top: { style: 'medium', color: { argb: 'FFF59E0B' } },
+    left: { style: 'medium', color: { argb: 'FFF59E0B' } },
+    bottom: { style: 'medium', color: { argb: 'FFF59E0B' } },
+    right: { style: 'medium', color: { argb: 'FFF59E0B' } }
+  }
+}
 
-  return linhas
+function desenharBlocoComposicaoExcel(ws, row, col, titulo, dados, verde, azul) {
+  const start = ws.getCell(row, col).address
+  const end = ws.getCell(row + 10, col + 3).address
+  ws.mergeCells(start + ':' + end)
+  const total = (dados || []).reduce((acc, item) => acc + Number(item.value || 0), 0) || 1
+  const box = ws.getCell(start)
+  box.value = `${titulo}\n\n${(dados || []).map((item) => `${item.name}: ${moeda(item.value)} • ${((Number(item.value || 0) / total) * 100).toFixed(2)}%`).join('\n')}`
+  box.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FF14532D' } }
+  box.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+  box.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } }
+  box.border = {
+    top: { style: 'medium', color: { argb: 'FF22C55E' } },
+    left: { style: 'medium', color: { argb: 'FF22C55E' } },
+    bottom: { style: 'medium', color: { argb: 'FF22C55E' } },
+    right: { style: 'medium', color: { argb: 'FF22C55E' } }
+  }
+}
+
+function adicionarTabelaDetalheExcel(ws, row, config) {
+  const { titulo, subtitulo, headers, rows, subtotais, color, moneyCols = [] } = config
+  const colCount = Math.min(headers.length, 10)
+  const endCol = String.fromCharCode(64 + colCount)
+
+  ws.mergeCells(`A${row}:${endCol}${row}`)
+  ws.getCell(`A${row}`).value = titulo
+  ws.getCell(`A${row}`).font = { name: 'Segoe UI', bold: true, size: 12, color: { argb: 'FFFFFFFF' } }
+  ws.getCell(`A${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } }
+  ws.getCell(`A${row}`).alignment = { vertical: 'middle' }
+  row++
+
+  ws.mergeCells(`A${row}:${endCol}${row}`)
+  ws.getCell(`A${row}`).value = subtitulo
+  ws.getCell(`A${row}`).font = { name: 'Segoe UI', italic: true, size: 9, color: { argb: 'FF475569' } }
+  row++
+
+  if (subtotais?.length) {
+    ws.getCell(row, 1).value = 'SUBTOTAIS'
+    ws.getCell(row, 1).font = { name: 'Segoe UI', bold: true, color: { argb: color } }
+    row++
+    subtotais.forEach(([nome, valor]) => {
+      ws.getCell(row, 1).value = nome
+      ws.getCell(row, 2).value = valor
+      ws.getCell(row, 2).numFmt = 'R$ #,##0.00;[Red]-R$ #,##0.00;R$ -'
+      ;[1, 2].forEach((c) => {
+        const cell = ws.getCell(row, c)
+        cell.font = { name: 'Segoe UI', bold: true, size: 9, color: { argb: 'FF0F172A' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+          left: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+          bottom: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+          right: { style: 'thin', color: { argb: 'FFD9E2EC' } }
+        }
+      })
+      row++
+    })
+    row++
+  }
+
+  headers.forEach((header, index) => {
+    const cell = ws.getCell(row, index + 1)
+    cell.value = header
+    cell.font = { name: 'Segoe UI', bold: true, size: 9, color: { argb: 'FFFFFFFF' } }
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+      left: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+      bottom: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+      right: { style: 'thin', color: { argb: 'FFD9E2EC' } }
+    }
+  })
+  row++
+
+  rows.forEach((linha, index) => {
+    linha.slice(0, colCount).forEach((valor, cIndex) => {
+      const cell = ws.getCell(row, cIndex + 1)
+      cell.value = valor
+      cell.font = { name: 'Segoe UI', size: 8, color: { argb: 'FF0F172A' } }
+      cell.alignment = { vertical: 'middle', wrapText: true }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: index % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC' } }
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      }
+      if (moneyCols.includes(cIndex + 1)) cell.numFmt = 'R$ #,##0.00;[Red]-R$ #,##0.00;R$ -'
+    })
+    row++
+  })
+
+  return row
+}
+
+async function imagemPublicParaBase64(url) {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Imagem não encontrada: ${url}`)
+  const blob = await response.blob()
+
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
 }
 
 function montarSubtotaisDetalhes(lista = [], campoGrupo = 'origem', campoValor = 'valor') {
