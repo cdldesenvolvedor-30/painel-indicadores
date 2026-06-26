@@ -1106,12 +1106,35 @@ async function gerarExcelRelatorio(relatorio) {
       })
     }
 
-    async function addImageFromPublic(url, range, ext = 'png') {
+    async function addImageFromPublic(url, config, ext = 'png') {
       try {
-        const base64 = await imagemPublicParaBase64(url)
-        if (!base64) return false
-        const id = workbook.addImage({ base64, extension: ext })
-        ws.addImage(id, range)
+        const imagem = await imagemPublicParaBase64ComDimensoes(url)
+        if (!imagem?.base64) return false
+
+        const ratio = imagem.width / imagem.height
+        let width = config.maxWidth
+        let height = width / ratio
+
+        if (height > config.maxHeight) {
+          height = config.maxHeight
+          width = height * ratio
+        }
+
+        const colOffset = config.align === 'right'
+          ? Math.max(0, (config.maxWidth - width) / 64)
+          : 0
+
+        const id = workbook.addImage({ base64: imagem.base64, extension: ext })
+        ws.addImage(id, {
+          tl: {
+            col: config.col + colOffset,
+            row: config.row
+          },
+          ext: {
+            width,
+            height
+          }
+        })
         return true
       } catch (error) {
         console.warn(`Não foi possível inserir a logo ${url}`, error)
@@ -1131,12 +1154,18 @@ async function gerarExcelRelatorio(relatorio) {
     ws.getCell('C1').alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
 
     const logoPainelOk = await addImageFromPublic('/logo-painel.png', {
-      tl: { col: 0.2, row: 0.15 },
-      ext: { width: 260, height: 62 }
+      col: 0.2,
+      row: 0.18,
+      maxWidth: 250,
+      maxHeight: 54,
+      align: 'left'
     })
     const logoCdlOk = await addImageFromPublic('/logo-cdl.png', {
-      tl: { col: 8.0, row: 0.12 },
-      ext: { width: 170, height: 62 }
+      col: 8.0,
+      row: 0.10,
+      maxWidth: 175,
+      maxHeight: 58,
+      align: 'right'
     })
 
     if (!logoPainelOk) {
@@ -1178,11 +1207,11 @@ async function gerarExcelRelatorio(relatorio) {
     // ===== KPI cards =====
     sectionTitle(7, 'RESUMO EXECUTIVO')
     const kpis = [
-      { titulo: 'RECEITA TOTAL', valor: relatorio.receitaTotal, cor: azul, icone: '💰' },
-      { titulo: 'DESPESA TOTAL', valor: relatorio.despesaTotal, cor: vermelho, icone: '💳' },
-      { titulo: 'LUCRO LÍQUIDO', valor: relatorio.lucroLiquido, cor: verde, icone: '📈' },
-      { titulo: 'MARGEM LÍQUIDA', valor: Number(relatorio.margemLiquida || 0) / 100, cor: roxo, icone: '%' },
-      { titulo: 'SALDO ACUMULADO', valor: relatorio.saldoAcumulado, cor: azul, icone: '🏦' }
+      { titulo: 'RECEITA TOTAL', valor: relatorio.receitaTotal, cor: azul, marcador: '●' },
+      { titulo: 'DESPESA TOTAL', valor: relatorio.despesaTotal, cor: vermelho, marcador: '●' },
+      { titulo: 'LUCRO LÍQUIDO', valor: relatorio.lucroLiquido, cor: verde, marcador: '●' },
+      { titulo: 'MARGEM LÍQUIDA', valor: Number(relatorio.margemLiquida || 0) / 100, cor: roxo, marcador: '%' },
+      { titulo: 'SALDO ACUMULADO', valor: relatorio.saldoAcumulado, cor: azul, marcador: '●' }
     ]
 
     const cardRanges = [
@@ -1476,6 +1505,32 @@ async function imagemPublicParaBase64(url) {
   })
 }
 
+async function imagemPublicParaBase64ComDimensoes(url) {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Imagem não encontrada: ${url}`)
+  const blob = await response.blob()
+
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+
+  const dimensoes = await new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height })
+    img.onerror = () => resolve({ width: 1, height: 1 })
+    img.src = base64
+  })
+
+  return {
+    base64,
+    width: dimensoes.width,
+    height: dimensoes.height
+  }
+}
+
 function montarSubtotaisDetalhes(lista = [], campoGrupo = 'origem', campoValor = 'valor') {
   const totais = {}
 
@@ -1486,6 +1541,30 @@ function montarSubtotaisDetalhes(lista = [], campoGrupo = 'origem', campoValor =
   })
 
   return Object.entries(totais).map(([nome, valor]) => [nome, arredondar(valor)])
+}
+
+
+async function gerarPDFRelatorio(relatorio) {
+  try {
+    const doc = new jsPDF('p', 'mm', 'a4')
+    const [painelLogo, cdlLogo] = await Promise.all([
+      carregarImagem(LOGO_PAINEL_BI_URL),
+      carregarImagem(LOGO_CDL_URL)
+    ])
+
+    configurarPaginaPDF(doc)
+    desenharCabecalhoPDF(doc, painelLogo, cdlLogo)
+    desenharTituloPDF(doc, relatorio)
+    desenharCardsPDF(doc, relatorio)
+    desenharGraficosPDF(doc, relatorio)
+    desenharTabelaPDF(doc, relatorio.dados, relatorio.resumo, 194)
+    desenharSecaoDetalhesPDF(doc, relatorio)
+    desenharRodapePDF(doc, relatorio)
+    doc.save(`OX360_Financeiro_${nomeArquivo(relatorio.mesReferencia)}.pdf`)
+  } catch (error) {
+    console.error(error)
+    toast.error('Erro ao gerar PDF. Verifique o console.')
+  }
 }
 
 function configurarPaginaPDF(doc) {
