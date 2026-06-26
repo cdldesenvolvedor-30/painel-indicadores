@@ -30,45 +30,76 @@ const PERFIS = [
 ]
 
 const TODOS_INDICADORES = {
-  Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
+  Digisac: [
+    'Indicadores',
+    'Mapa de Performance',
+    'Classificação',
+    'Alertas',
+    'CRM Atendimento',
+    'Meta x Resultado',
+    'Metas/KPIs'
+  ],
   Shift: [],
-  Gestão: ['Colaboradores', 'Integrações', 'Usuários', 'Auditoria']
+  Atendimento: [
+    'Compliance das Unidades'
+  ],
+  Diretoria: [
+    'OX360 Financeiro'
+  ],
+  Gestão: [
+    'Colaboradores',
+    'Integrações',
+    'Usuários',
+    'Auditoria'
+  ]
 }
 
 const PERMISSOES_POR_PERFIL = {
   admin: {
     Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
     Shift: [],
+    Atendimento: ['Compliance das Unidades'],
+    Diretoria: ['OX360 Financeiro'],
     Gestão: ['Colaboradores', 'Integrações', 'Usuários', 'Auditoria']
   },
 
   diretoria: {
     Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
     Shift: [],
+    Atendimento: ['Compliance das Unidades'],
+    Diretoria: ['OX360 Financeiro'],
     Gestão: []
   },
 
   gerencia: {
     Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas', 'CRM Atendimento', 'Meta x Resultado', 'Metas/KPIs'],
     Shift: [],
+    Atendimento: ['Compliance das Unidades'],
+    Diretoria: ['OX360 Financeiro'],
     Gestão: []
   },
 
   gestao: {
     Digisac: [],
     Shift: [],
+    Atendimento: ['Compliance das Unidades'],
+    Diretoria: ['OX360 Financeiro'],
     Gestão: []
   },
 
   supervisao: {
     Digisac: ['Indicadores', 'Mapa de Performance', 'Classificação', 'Alertas'],
     Shift: [],
+    Atendimento: ['Compliance das Unidades'],
+    Diretoria: ['OX360 Financeiro'],
     Gestão: []
   },
 
   usuario: {
     Digisac: ['Indicadores'],
     Shift: [],
+    Atendimento: ['Compliance das Unidades'],
+    Diretoria: ['OX360 Financeiro'],
     Gestão: []
   }
 }
