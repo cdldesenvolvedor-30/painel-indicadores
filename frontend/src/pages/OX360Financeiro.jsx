@@ -39,12 +39,12 @@ const CAMPOS_FIXOS = [
   { key: 'condominio', nome: 'Condomínio' },
   { key: 'aluguel', nome: 'Aluguel' },
   { key: 'servicosGerais', nome: 'Serviços Gerais' },
-  { key: 'salarios', nome: 'Salários' },
   { key: 'manutencaoAr', nome: 'Manutenção de Ar Condicionado' },
   { key: 'setorFaturamento', nome: 'Setor Faturamento' }
 ]
 
 const CAMPOS_MANUAIS = [
+  { key: 'salarios', nome: 'Salários' },
   { key: 'luz', nome: 'Luz' },
   { key: 'marketing', nome: 'MKT / Tráfego SXT' },
   { key: 'impostos', nome: 'Impostos' },
@@ -59,8 +59,7 @@ const CAMPOS_IMPORTADOS = [
   { key: 'faturamentoParticular', nome: 'Faturamento Particular' },
   { key: 'faturamentoConvenio', nome: 'Faturamento Convênio' },
   { key: 'materialLimpeza', nome: 'Material Limpeza' },
-  { key: 'almoxarifado', nome: 'Almoxarifado' },
-  { key: 'assessoriaTecnica', nome: 'Assessoria Técnica' }
+  { key: 'almoxarifado', nome: 'Almoxarifado' }
 ]
 
 const LIMPEZA_KEYWORDS = [
@@ -94,7 +93,6 @@ function valorInicial() {
       condominio: 2110.03,
       aluguel: 20000,
       servicosGerais: 1518.78,
-      salarios: 19500,
       manutencaoAr: 12800,
       setorFaturamento: 6846.2
     },
@@ -121,15 +119,24 @@ function OX360Financeiro() {
 
     try {
       const dadosSalvos = JSON.parse(salvo)
+      const fixosSalvos = { ...(dadosSalvos.fixos || {}) }
+      const manuaisSalvos = { ...(dadosSalvos.manuais || {}) }
+
+      if (fixosSalvos.salarios && !manuaisSalvos.salarios) {
+        manuaisSalvos.salarios = Number(fixosSalvos.salarios || 0)
+      }
+
+      delete fixosSalvos.salarios
+
       return {
         ...valorInicial(),
         ...dadosSalvos,
         fixos: {
           ...valorInicial().fixos,
-          ...(dadosSalvos.fixos || {})
+          ...fixosSalvos
         },
-        manuais: dadosSalvos.manuais || {},
-        importados: dadosSalvos.importados || {},
+        manuais: manuaisSalvos,
+        importados: filtrarImportados(dadosSalvos.importados || {}),
         historico: dadosSalvos.historico || [],
         arquivosImportados: dadosSalvos.arquivosImportados || {},
         detalhesImportados: {
@@ -425,12 +432,7 @@ function OX360Financeiro() {
           </div>
         </div>
 
-        <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
-          <h2 className="text-xl font-bold mb-4">Detalhes Importados</h2>
-          <p className="text-slate-400 text-sm">
-            Os registros detalhados das planilhas são armazenados no relatório PDF e na planilha Excel completa.
-          </p>
-        </div>
+        <DetalhesImportadosPainel detalhes={dados.detalhesImportados} arquivos={dados.arquivosImportados} />
       </section>
 
       <section className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
@@ -485,11 +487,24 @@ function OX360Financeiro() {
 }
 
 function somarImportados(atual = {}, novo = {}) {
-  const chaves = new Set([...Object.keys(atual || {}), ...Object.keys(novo || {})])
+  const atualFiltrado = filtrarImportados(atual)
+  const novoFiltrado = filtrarImportados(novo)
+  const chaves = new Set([...Object.keys(atualFiltrado || {}), ...Object.keys(novoFiltrado || {})])
   const resultado = {}
 
   chaves.forEach((key) => {
-    resultado[key] = Number(atual?.[key] || 0) + Number(novo?.[key] || 0)
+    resultado[key] = Number(atualFiltrado?.[key] || 0) + Number(novoFiltrado?.[key] || 0)
+  })
+
+  return resultado
+}
+
+function filtrarImportados(importados = {}) {
+  const permitidos = new Set(CAMPOS_IMPORTADOS.map((campo) => campo.key))
+  const resultado = {}
+
+  Object.entries(importados || {}).forEach(([key, valor]) => {
+    if (permitidos.has(key)) resultado[key] = Number(valor || 0)
   })
 
   return resultado
@@ -522,7 +537,7 @@ function mesclarArquivosImportados(atual = {}, novo = {}) {
 }
 
 function calcularResumo(dados) {
-  const fixosTotal = somaObjeto(dados.fixos)
+  const fixosTotal = somaCampos(dados.fixos, CAMPOS_FIXOS)
   const manuaisTotal = somaCampos(dados.manuais, CAMPOS_MANUAIS.filter((c) => c.key !== 'saldoAnterior'))
 
   const entradas =
@@ -533,8 +548,7 @@ function calcularResumo(dados) {
 
   const saidasImportadas =
     Number(dados.importados?.materialLimpeza || 0) +
-    Number(dados.importados?.almoxarifado || 0) +
-    Number(dados.importados?.assessoriaTecnica || 0)
+    Number(dados.importados?.almoxarifado || 0)
 
   const saidas = saidasFixasRateadas + manuaisTotal + saidasImportadas
   const lucro = entradas - saidas
@@ -559,8 +573,7 @@ async function processarArquivosImportados(arquivos, mesReferencia) {
     faturamentoParticular: 0,
     faturamentoConvenio: 0,
     materialLimpeza: 0,
-    almoxarifado: 0,
-    assessoriaTecnica: 0
+    almoxarifado: 0
   }
 
   const detalhesImportados = {
@@ -595,7 +608,6 @@ async function processarArquivosImportados(arquivos, mesReferencia) {
       }
     } else {
       const resultado = processarAssessoria(workbook)
-      importados.assessoriaTecnica += resultado.valor
       detalhesImportados.assessoria.push(...resultado.detalhes)
       arquivosImportados.assessoria = {
         nome: arquivo.name,
@@ -864,8 +876,7 @@ function criarDadosGraficoComposicao(dados, resumo) {
     { name: 'Fixas rateadas', value: arredondar(resumo.saidasFixasRateadas), color: CORES_GRAFICO.azul },
     { name: 'Manuais', value: arredondar(resumo.manuaisTotal), color: CORES_GRAFICO.vermelho },
     { name: 'Material Limpeza', value: arredondar(dados.importados?.materialLimpeza || 0), color: CORES_GRAFICO.verde },
-    { name: 'Almoxarifado', value: arredondar(dados.importados?.almoxarifado || 0), color: CORES_GRAFICO.amarelo },
-    { name: 'Assessoria Técnica', value: arredondar(dados.importados?.assessoriaTecnica || 0), color: CORES_GRAFICO.roxo }
+    { name: 'Almoxarifado', value: arredondar(dados.importados?.almoxarifado || 0), color: CORES_GRAFICO.amarelo }
   ].filter((item) => item.value > 0)
 }
 
@@ -2188,6 +2199,78 @@ function LinhaResumoCompleta({ linha }) {
       <td className="p-3 text-right text-green-300">{valorOuTraco(linha[5])}</td>
     </tr>
   )
+}
+
+
+function DetalhesImportadosPainel({ detalhes = {}, arquivos = {} }) {
+  const resumo = [
+    {
+      key: 'faturamento',
+      titulo: 'Faturamento',
+      registros: detalhes.faturamento?.length || 0,
+      arquivo: arquivos.faturamento?.nome || 'Não importado',
+      valor: somaLista(detalhes.faturamento || [], 'valorConsiderado')
+    },
+    {
+      key: 'estoque',
+      titulo: 'Estoque / Materiais',
+      registros: detalhes.estoque?.length || 0,
+      arquivo: arquivos.estoque?.nome || 'Não importado',
+      valor: somaLista(detalhes.estoque || [], 'valor')
+    },
+    {
+      key: 'assessoria',
+      titulo: 'Assessoria Técnica',
+      registros: detalhes.assessoria?.length || 0,
+      arquivo: arquivos.assessoria?.nome || 'Não importado',
+      valor: somaLista(detalhes.assessoria || [], 'valor')
+    }
+  ]
+
+  const totalRegistros = resumo.reduce((acc, item) => acc + item.registros, 0)
+
+  return (
+    <div className="bg-slate-900/70 border border-blue-500/10 rounded-3xl p-6">
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h2 className="text-xl font-bold">Detalhes Importados</h2>
+          <p className="text-slate-400 text-sm mt-1">
+            Conferência dos registros que serão levados ao PDF e Excel completo.
+          </p>
+        </div>
+
+        <div className="bg-blue-600/15 border border-blue-500/20 rounded-2xl px-4 py-3 text-right">
+          <p className="text-xs text-blue-300">Total lido</p>
+          <p className="text-2xl font-black text-white">{totalRegistros}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {resumo.map((item) => (
+          <div
+            key={item.key}
+            className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-bold text-white">{item.titulo}</p>
+                <p className="text-xs text-slate-500 truncate mt-1">{item.arquivo}</p>
+              </div>
+
+              <div className="text-right shrink-0">
+                <p className="text-sm font-bold text-blue-300">{item.registros} registro(s)</p>
+                <p className="text-xs text-slate-400 mt-1">{moeda(item.valor)}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function somaLista(lista = [], campo = 'valor') {
+  return (lista || []).reduce((acc, item) => acc + Number(item?.[campo] || 0), 0)
 }
 
 function PainelCampos({ titulo, subtitulo, campos, grupo, dados, onChange, editavel, acao }) {
