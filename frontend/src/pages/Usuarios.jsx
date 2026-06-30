@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import Topbar from '../components/Topbar'
 import SkeletonCard from '../components/SkeletonCard'
 
@@ -104,19 +105,54 @@ const PERMISSOES_POR_PERFIL = {
   }
 }
 
-function clonarPermissoes(permissoes) {
-  return {
-    Digisac: [...(permissoes?.Digisac || [])],
-    Shift: [...(permissoes?.Shift || [])],
-    Gestão: [...(permissoes?.Gestão || [])]
+function parsePermissoes(permissoes) {
+  if (!permissoes) return null
+
+  if (typeof permissoes === 'string') {
+    try {
+      return JSON.parse(permissoes)
+    } catch {
+      return null
+    }
   }
+
+  return permissoes
+}
+
+function clonarPermissoes(permissoes) {
+  const permissoesParseadas = parsePermissoes(permissoes) || {}
+
+  return Object.keys(TODOS_INDICADORES).reduce((acc, modulo) => {
+    acc[modulo] = Array.isArray(permissoesParseadas?.[modulo])
+      ? [...permissoesParseadas[modulo]]
+      : []
+
+    return acc
+  }, {})
 }
 
 function permissoesDoPerfil(perfil) {
   return clonarPermissoes(PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.usuario)
 }
 
+function normalizarUsuario(usuario) {
+  const permissoesBase = permissoesDoPerfil(usuario?.perfil || 'usuario')
+  const permissoesSalvas = parsePermissoes(usuario?.permissoes)
+
+  return {
+    ...usuario,
+    permissoes: permissoesSalvas
+      ? clonarPermissoes({
+          ...permissoesBase,
+          ...permissoesSalvas
+        })
+      : permissoesBase
+  }
+}
+
 function Usuarios() {
+  const { usuario: usuarioLogado, atualizarUsuarioLocal } = useAuth()
+
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -156,7 +192,7 @@ function Usuarios() {
 
       const response = await api.get('/usuarios')
 
-      setUsuarios(response.data)
+      setUsuarios((response.data || []).map(normalizarUsuario))
     } catch (error) {
       console.error(error)
 
@@ -176,7 +212,7 @@ function Usuarios() {
         senha,
         perfil,
         setor,
-        permissoes
+        permissoes: clonarPermissoes(permissoes)
       })
 
       toast.success('Usuário cadastrado com sucesso 🚀')
@@ -212,14 +248,20 @@ function Usuarios() {
 
   async function salvarEdicao(id) {
     try {
-      await api.put(`/usuarios/${id}`, {
+      const payload = {
         nome: editNome,
         email: editEmail,
         perfil: editPerfil,
         setor: editSetor,
         status: editStatus,
-        permissoes: editPermissoes
-      })
+        permissoes: clonarPermissoes(editPermissoes)
+      }
+
+      await api.put(`/usuarios/${id}`, payload)
+
+      if (Number(usuarioLogado?.id) === Number(id)) {
+        atualizarUsuarioLocal(payload)
+      }
 
       toast.success('Usuário atualizado com sucesso 🚀')
 
