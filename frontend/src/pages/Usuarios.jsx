@@ -21,6 +21,8 @@ import { useAuth } from '../context/AuthContext'
 import Topbar from '../components/Topbar'
 import SkeletonCard from '../components/SkeletonCard'
 
+const PERMISSOES_STORAGE_KEY = 'usuarios_permissoes_customizadas'
+
 const PERFIS = [
   { value: 'usuario', label: 'Usuário' },
   { value: 'gestao', label: 'Gestão' },
@@ -131,21 +133,51 @@ function clonarPermissoes(permissoes) {
   }, {})
 }
 
+function chaveUsuarioPermissoes(usuario) {
+  if (!usuario) return null
+  return usuario.id ? `id:${usuario.id}` : `email:${usuario.email}`
+}
+
+function buscarPermissoesCustomizadas(usuario) {
+  const chave = chaveUsuarioPermissoes(usuario)
+  if (!chave) return null
+
+  try {
+    const mapa = JSON.parse(localStorage.getItem(PERMISSOES_STORAGE_KEY) || '{}')
+    return mapa[chave] || null
+  } catch {
+    return null
+  }
+}
+
+function salvarPermissoesCustomizadas(usuario, permissoes) {
+  const chave = chaveUsuarioPermissoes(usuario)
+  if (!chave) return
+
+  try {
+    const mapa = JSON.parse(localStorage.getItem(PERMISSOES_STORAGE_KEY) || '{}')
+    mapa[chave] = clonarPermissoes(permissoes)
+    localStorage.setItem(PERMISSOES_STORAGE_KEY, JSON.stringify(mapa))
+  } catch {
+    localStorage.setItem(PERMISSOES_STORAGE_KEY, JSON.stringify({
+      [chave]: clonarPermissoes(permissoes)
+    }))
+  }
+}
+
 function permissoesDoPerfil(perfil) {
   return clonarPermissoes(PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.usuario)
 }
 
 function normalizarUsuario(usuario) {
   const permissoesBase = permissoesDoPerfil(usuario?.perfil || 'usuario')
-  const permissoesSalvas = parsePermissoes(usuario?.permissoes)
+  const permissoesCustomizadas = buscarPermissoesCustomizadas(usuario)
+  const permissoesSalvas = permissoesCustomizadas || parsePermissoes(usuario?.permissoes)
 
   return {
     ...usuario,
     permissoes: permissoesSalvas
-      ? clonarPermissoes({
-          ...permissoesBase,
-          ...permissoesSalvas
-        })
+      ? clonarPermissoes(permissoesSalvas)
       : permissoesBase
   }
 }
@@ -257,10 +289,27 @@ function Usuarios() {
         permissoes: clonarPermissoes(editPermissoes)
       }
 
+      const usuarioEditado = usuarios.find((item) => Number(item.id) === Number(id)) || { id, email: editEmail }
+      salvarPermissoesCustomizadas(usuarioEditado, payload.permissoes)
+      salvarPermissoesCustomizadas({ email: editEmail }, payload.permissoes)
+
       await api.put(`/usuarios/${id}`, payload)
 
+      const usuarioAtualizado = normalizarUsuario({
+        ...usuarioEditado,
+        ...payload,
+        id
+      })
+
+      setUsuarios((lista) =>
+        lista.map((item) => Number(item.id) === Number(id) ? usuarioAtualizado : item)
+      )
+
       if (Number(usuarioLogado?.id) === Number(id)) {
-        atualizarUsuarioLocal(payload)
+        atualizarUsuarioLocal({
+          ...payload,
+          permissoes: payload.permissoes
+        })
       }
 
       toast.success('Usuário atualizado com sucesso 🚀')
