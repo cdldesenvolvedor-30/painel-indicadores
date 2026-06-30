@@ -1,8 +1,9 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 function ProtectedRoute({ children }) {
-  const { usuario, loading } = useAuth()
+  const location = useLocation()
+  const { usuario, loading, usuarioPodeAcessarRota } = useAuth()
 
   if (loading) {
     return (
@@ -13,7 +14,11 @@ function ProtectedRoute({ children }) {
   }
 
   if (!usuario) {
-    return <Navigate to="/login" />
+    return <Navigate to="/login" replace />
+  }
+
+  if (!usuarioPodeAcessarRota(location.pathname)) {
+    return <Navigate to="/dashboard" replace />
   }
 
   return children
