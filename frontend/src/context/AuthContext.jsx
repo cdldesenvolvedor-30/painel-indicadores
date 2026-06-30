@@ -10,6 +10,8 @@ import api from '../services/api'
 
 const AuthContext = createContext()
 
+const PERMISSOES_STORAGE_KEY = 'usuarios_permissoes_customizadas'
+
 export const PERMISSAO_MODULO = '__MODULO__'
 
 export const TODOS_INDICADORES = {
@@ -108,18 +110,52 @@ export function clonarPermissoes(permissoes = {}) {
   }, {})
 }
 
+function parsePermissoes(permissoes) {
+  if (!permissoes) return null
+
+  if (typeof permissoes === 'string') {
+    try {
+      return JSON.parse(permissoes)
+    } catch {
+      return null
+    }
+  }
+
+  return permissoes
+}
+
+function chaveUsuarioPermissoes(usuario) {
+  if (!usuario) return null
+  return usuario.id ? `id:${usuario.id}` : `email:${usuario.email}`
+}
+
+function buscarPermissoesCustomizadas(usuario) {
+  const chave = chaveUsuarioPermissoes(usuario)
+  if (!chave) return null
+
+  try {
+    const mapa = JSON.parse(localStorage.getItem(PERMISSOES_STORAGE_KEY) || '{}')
+    return mapa[chave] || null
+  } catch {
+    return null
+  }
+}
+
 export function normalizarPermissoes(usuario) {
   const perfil = usuario?.perfil || 'usuario'
   const permissoesBase = PERMISSOES_POR_PERFIL[perfil] || PERMISSOES_POR_PERFIL.usuario
 
-  if (!usuario?.permissoes) {
-    return clonarPermissoes(permissoesBase)
+  // Prioridade total para permissões salvas manualmente.
+  // Isso evita que o perfil (Diretoria, Gerência etc.) volte a marcar tudo após salvar.
+  const permissoesCustomizadas = buscarPermissoesCustomizadas(usuario)
+  const permissoesRecebidas = parsePermissoes(usuario?.permissoes)
+  const permissoesFinais = permissoesCustomizadas || permissoesRecebidas
+
+  if (permissoesFinais) {
+    return clonarPermissoes(permissoesFinais)
   }
 
-  return clonarPermissoes({
-    ...clonarPermissoes(permissoesBase),
-    ...usuario.permissoes
-  })
+  return clonarPermissoes(permissoesBase)
 }
 
 export function usuarioTemPermissao(usuario, modulo, indicador) {
