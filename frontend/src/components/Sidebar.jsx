@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import {
@@ -30,7 +30,7 @@ import { useAuth } from '../context/AuthContext'
 function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { usuario, logout } = useAuth()
+  const { usuario, logout, usuarioTemPermissao } = useAuth()
 
   const [menuAtual, setMenuAtual] = useState(null)
 
@@ -39,17 +39,17 @@ function Sidebar() {
     navigate('/login')
   }
 
-  const menus = {
+  const menusBase = {
     Digisac: {
       icon: Database,
       itens: [
-        { to: '/indicadores', texto: 'Indicadores', icon: BarChart3 },
-        { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map },
-        { to: '/ranking', texto: 'Classificação', icon: Trophy },
-        { to: '/alertas', texto: 'Alertas', icon: Bell },
-        { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore },
-        { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target },
-        { to: '/metas', texto: 'Metas/KPIs', icon: Target }
+        { to: '/indicadores', texto: 'Indicadores', icon: BarChart3, permissao: 'Indicadores' },
+        { to: '/mapa-performance', texto: 'Mapa de Performance', icon: Map, permissao: 'Mapa de Performance' },
+        { to: '/ranking', texto: 'Classificação', icon: Trophy, permissao: 'Classificação' },
+        { to: '/alertas', texto: 'Alertas', icon: Bell, permissao: 'Alertas' },
+        { to: '/crm', texto: 'CRM Atendimento', icon: MessageSquareMore, permissao: 'CRM Atendimento' },
+        { to: '/comparativo-metas', texto: 'Meta x Resultado', icon: Target, permissao: 'Meta x Resultado' },
+        { to: '/metas', texto: 'Metas/KPIs', icon: Target, permissao: 'Metas/KPIs' }
       ]
     },
 
@@ -59,42 +59,59 @@ function Sidebar() {
     },
 
     Atendimento: {
-  icon: ClipboardCheck,
-  itens: [
-    {
-      to: '/atendimento-compliance',
-      texto: 'Compliance das Unidades',
-      icon: ClipboardCheck
-    }
-  ]
-},
+      icon: ClipboardCheck,
+      itens: [
+        {
+          to: '/atendimento-compliance',
+          texto: 'Compliance das Unidades',
+          icon: ClipboardCheck,
+          permissao: 'Compliance das Unidades'
+        }
+      ]
+    },
 
     Diretoria: {
-  icon: BriefcaseBusiness,
-  itens: [
-    {
-      to: '/ox360-financeiro',
-      texto: 'OX360 Financeiro',
-      icon: WalletCards
-    }
-  ]
-},
-    
+      icon: BriefcaseBusiness,
+      itens: [
+        {
+          to: '/ox360-financeiro',
+          texto: 'OX360 Financeiro',
+          icon: WalletCards,
+          permissao: 'OX360 Financeiro'
+        }
+      ]
+    },
+
     Gestão: {
       icon: Settings,
       itens: [
-        { to: '/colaboradores', texto: 'Colaboradores', icon: Users },
-        { to: '/integracoes', texto: 'Integrações', icon: PlugZap },
-        ...(usuario?.perfil === 'admin'
-          ? [
-              { to: '/usuarios', texto: 'Usuários', icon: UserCog },
-              { to: '/logs', texto: 'Auditoria', icon: FileClock }
-            ]
-          : [])
+        { to: '/colaboradores', texto: 'Colaboradores', icon: Users, permissao: 'Colaboradores' },
+        { to: '/integracoes', texto: 'Integrações', icon: PlugZap, permissao: 'Integrações' },
+        { to: '/usuarios', texto: 'Usuários', icon: UserCog, permissao: 'Usuários' },
+        { to: '/logs', texto: 'Auditoria', icon: FileClock, permissao: 'Auditoria' }
       ]
     }
   }
-  
+
+  const menus = useMemo(() => {
+    return Object.entries(menusBase).reduce((acc, [nome, menu]) => {
+      const itensPermitidos = menu.itens.filter((item) =>
+        usuarioTemPermissao(nome, item.permissao)
+      )
+
+      const moduloPermitido = usuarioTemPermissao(nome)
+
+      if (itensPermitidos.length > 0 || moduloPermitido) {
+        acc[nome] = {
+          ...menu,
+          itens: itensPermitidos
+        }
+      }
+
+      return acc
+    }, {})
+  }, [usuario])
+
   return (
     <aside className="w-72 min-h-screen bg-[#050b18] border-r border-blue-500/10 p-5 flex flex-col justify-between">
       <div>
@@ -147,7 +164,7 @@ function Sidebar() {
               </h2>
             </div>
 
-            {menus[menuAtual].itens.length === 0 && (
+            {menus[menuAtual]?.itens.length === 0 && (
               <div className="mt-8 bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center">
                 <p className="text-slate-300 font-semibold">
                   Nenhum indicador cadastrado
@@ -159,7 +176,7 @@ function Sidebar() {
               </div>
             )}
 
-            {menus[menuAtual].itens.map((item) => (
+            {menus[menuAtual]?.itens.map((item) => (
               <Item
                 key={item.to}
                 to={item.to}
