@@ -33,36 +33,69 @@ const OBRIGACOES = [
   {
     chave: 'residuo',
     titulo: 'Lixo Biológico',
-    descricao: 'Controle da coleta de resíduos biológicos.',
-    periodicidadeMeses: 3,
+    descricao: 'Centro, Vieiralves e Zona Leste: trimestral. Demais unidades: mensal.',
     responsavel: 'Operações',
     icon: Recycle
   },
   {
     chave: 'dedetizacao',
     titulo: 'Dedetização',
-    descricao: 'Controle de dedetização preventiva da unidade.',
-    periodicidadeMeses: 3,
+    descricao: 'Controle mensal de dedetização preventiva da unidade.',
     responsavel: 'Operações / Marcelo',
     icon: SprayCan
   },
   {
     chave: 'extintor',
     titulo: 'Extintor',
-    descricao: 'Controle de validade, troca e recarga dos extintores.',
-    periodicidadeMeses: 12,
+    descricao: 'Controle anual de validade, troca e recarga dos extintores.',
     responsavel: 'Operações',
     icon: Flame
   },
   {
     chave: 'reservatorio',
     titulo: "Reservatório / Caixa d'água",
-    descricao: 'Controle de limpeza dos reservatórios da unidade.',
-    periodicidadeMeses: 6,
+    descricao: 'Controle semestral de limpeza dos reservatórios da unidade.',
     responsavel: 'Unidade',
     icon: Droplets
   }
 ]
+
+const PERIODICIDADES = {
+  residuo: {
+    padrao: 1,
+    excecoes: {
+      Centro: 3,
+      Vieiralves: 3,
+      'Zona Leste': 3
+    }
+  },
+  dedetizacao: {
+    padrao: 1
+  },
+  extintor: {
+    padrao: 12
+  },
+  reservatorio: {
+    padrao: 6
+  }
+}
+
+function obterPeriodicidadeMeses(unidade, chaveObrigacao) {
+  const regra = PERIODICIDADES[chaveObrigacao]
+
+  if (!regra) return 1
+
+  return regra.excecoes?.[unidade] || regra.padrao
+}
+
+function textoPeriodicidade(meses) {
+  if (meses === 1) return 'Mensal'
+  if (meses === 3) return 'Trimestral'
+  if (meses === 6) return 'Semestral'
+  if (meses === 12) return 'Anual'
+
+  return `A cada ${meses} meses`
+}
 
 function adicionarMeses(dataISO, meses) {
   if (!dataISO) return ''
@@ -155,13 +188,38 @@ function criarDadosIniciais() {
   return dados
 }
 
+function normalizarDados(dadosSalvos = {}) {
+  const dadosBase = criarDadosIniciais()
+
+  for (const unidade of UNIDADES_PADRAO) {
+    for (const obrigacao of OBRIGACOES) {
+      const itemSalvo = dadosSalvos?.[unidade]?.[obrigacao.chave] || {}
+      const ultimaRealizacao = itemSalvo.ultimaRealizacao || ''
+      const periodicidadeMeses = obterPeriodicidadeMeses(unidade, obrigacao.chave)
+
+      dadosBase[unidade][obrigacao.chave] = {
+        ...dadosBase[unidade][obrigacao.chave],
+        ...itemSalvo,
+        responsavel: itemSalvo.responsavel || obrigacao.responsavel,
+        ultimaRealizacao,
+        proximoVencimento: ultimaRealizacao
+          ? adicionarMeses(ultimaRealizacao, periodicidadeMeses)
+          : itemSalvo.proximoVencimento || '',
+        atualizadoEm: itemSalvo.atualizadoEm || ''
+      }
+    }
+  }
+
+  return dadosBase
+}
+
 function AtendimentoCompliance() {
   const [dados, setDados] = useState(() => {
     const salvo = localStorage.getItem(STORAGE_KEY)
 
     if (salvo) {
       try {
-        return JSON.parse(salvo)
+        return normalizarDados(JSON.parse(salvo))
       } catch {
         return criarDadosIniciais()
       }
@@ -218,9 +276,11 @@ function AtendimentoCompliance() {
       unidade,
       chave: obrigacao.chave,
       titulo: obrigacao.titulo,
-      periodicidadeMeses: obrigacao.periodicidadeMeses,
+      periodicidadeMeses: obterPeriodicidadeMeses(unidade, obrigacao.chave),
       ultimaRealizacao: atual.ultimaRealizacao || '',
-      proximoVencimento: atual.proximoVencimento || '',
+      proximoVencimento: atual.ultimaRealizacao
+        ? adicionarMeses(atual.ultimaRealizacao, obterPeriodicidadeMeses(unidade, obrigacao.chave))
+        : atual.proximoVencimento || '',
       responsavel: atual.responsavel || obrigacao.responsavel,
       observacao: atual.observacao || ''
     })
@@ -354,6 +414,9 @@ function AtendimentoCompliance() {
                   <div className="flex items-center gap-3 mb-2">
                     <span className={`w-3.5 h-3.5 rounded-full shadow-lg ${status.ponto}`} />
                     <Icon size={17} className="text-slate-400 group-hover:text-blue-400 transition" />
+                    <span className="text-[11px] text-slate-500">
+                      {textoPeriodicidade(obterPeriodicidadeMeses(unidade, obrigacao.chave))}
+                    </span>
                   </div>
 
                   <p className="text-sm text-slate-300">
